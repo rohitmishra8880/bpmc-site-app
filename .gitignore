@@ -1,0 +1,29 @@
+# dependencies / build / cache (CLAUDE.md T9)
+node_modules/
+dist/
+build/
+coverage/
+.vite/
+.cache/
+*.tsbuildinfo
+
+# secrets — kabhi GitHub par nahi (CLAUDE.md T4)
+.env
+.env.*
+!.env.example
+*-service-account*.json
+serviceAccountKey*.json
+
+# firebase local
+.firebase/
+firebase-debug*.log
+firestore-debug.log
+ui-debug.log
+
+# logs / OS / editor
+*.log
+npm-debug.log*
+Thumbs.db
+.DS_Store
+.vscode/*
+!.vscode/extensions.json

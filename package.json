@@ -1,0 +1,22 @@
+{
+  "name": "bpmc-site-app",
+  "private": true,
+  "version": "0.0.0",
+  "description": "B.P. Mishra & Co. — Construction Site Management & DPR",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "npm run test -w @bpmc/core",
+    "build": "npm run build -w @bpmc/web",
+    "dev": "npm run dev -w @bpmc/web",
+    "emulators": "firebase emulators:start --project demo-bpmc"
+  },
+  "devDependencies": {
+    "firebase-tools": "^14.0.0"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "@bpmc/server",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Google Apps Script server — hisab, Drive photos, Obsidian backup, Sheet khata (PLAN.md §1). clasp se deploy.",
+  "type": "module",
+  "scripts": {
+    "clasp": "clasp"
+  },
+  "devDependencies": {
+    "@google/clasp": "^3.0.0"
+  }
+}

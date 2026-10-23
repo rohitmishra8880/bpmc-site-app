@@ -1,0 +1,10 @@
+rules_version = '2';
+
+// Phase 0: sab band. Asli role / project / 2-din lock wale niyam Phase 1 mein (tests ke saath).
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
