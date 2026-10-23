@@ -1,10 +1,200 @@
 rules_version = '2';
 
-// Phase 0: sab band. Asli role / project / 2-din lock wale niyam Phase 1 mein (tests ke saath).
+// BPMC — Firestore security rules (PLAN.md §2, §4).
+// Pehchaan email se: users/{email}. Role ki permissions roles/{roleId}.permissions mein.
+// Server (Apps Script) owner ke IAM se likhta hai, isliye rules uspar lagte hi nahi —
+// yahan "write: if false" wale collection sirf server likh sakta hai.
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if false;
+
+    // ---------- pehchaan ----------
+    function email() {
+      return request.auth.token.email;
+    }
+    function signedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+    function me() {
+      return get(/databases/$(database)/documents/users/$(email())).data;
+    }
+    function isActiveUser() {
+      return signedIn() && exists(/databases/$(database)/documents/users/$(email())) && me().active == true;
+    }
+    function perms() {
+      return get(/databases/$(database)/documents/roles/$(me().role)).data.permissions;
+    }
+    function can(p) {
+      return isActiveUser() && (me().role == 'admin' || p in perms());
+    }
+    function isAdmin() {
+      return isActiveUser() && me().role == 'admin';
+    }
+    function member(pid) {
+      return isActiveUser() && (me().role == 'admin' || pid in me().projectIds);
+    }
+
+    // ---------- tarikh: 2 din ka niyam (core/date.ts jaisa) ----------
+    function isDateStr(d) {
+      return d is string && d.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+    // Din D ki IST aadhi raat
+    function istStart(d) {
+      return timestamp.date(int(d[0:4]), int(d[5:7]), int(d[8:10])) - duration.value(19800, 's');
+    }
+    function unlockedTill(pid, d) {
+      return exists(/databases/$(database)/documents/projects/$(pid)/unlocks/$(d))
+        && get(/databases/$(database)/documents/projects/$(pid)/unlocks/$(d)).data.expiresAt > request.time;
+    }
+    // D, D+1, D+2 (raat 11:59 IST) tak khula; aage ki tarikh nahi; baad mein sirf Admin ka unlock
+    function dateOpen(pid, d) {
+      return isDateStr(d)
+        && istStart(d) <= request.time
+        && (request.time < istStart(d) + duration.value(3, 'd') || unlockedTill(pid, d));
+    }
+
+    // ---------- audit: har likhai ke saath usi batch mein audit record ----------
+    function auditAfter(pid, id) {
+      return getAfter(/databases/$(database)/documents/projects/$(pid)/auditLog/$(id)).data;
+    }
+    function auditMatches(pid, col, docId, action) {
+      let a = auditAfter(pid, request.resource.data.lastAuditId);
+      return existsAfter(/databases/$(database)/documents/projects/$(pid)/auditLog/$(request.resource.data.lastAuditId))
+        && a.entity == col + '/' + docId
+        && a.action == action
+        && a.rev == request.resource.data.rev
+        && a.by == email();
+    }
+
+    // ---------- global ----------
+    match /users/{userEmail} {
+      allow read: if isActiveUser() && (userEmail == email() || isAdmin());
+      allow write: if isAdmin();
+    }
+    match /roles/{roleId} {
+      allow read: if isActiveUser();
+      allow write: if isAdmin();
+    }
+    match /settings/{doc} {
+      allow read: if isActiveUser();
+      allow write: if isAdmin();
+    }
+    match /auditLog/{id} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && request.resource.data.by == email() && request.resource.data.at == request.time;
+      allow update, delete: if false;
+    }
+
+    // Masters: masters_materials, masters_machines, masters_contractors, masters_parties, masters_storeItems, masters_staff
+    match /{col}/{id} {
+      function isMaster() {
+        return col in ['masters_materials', 'masters_machines', 'masters_contractors', 'masters_parties', 'masters_storeItems', 'masters_staff'];
+      }
+      allow read: if isMaster() && isActiveUser();
+      allow create: if isMaster() && can('masters.edit')
+        && request.resource.data.createdBy == email()
+        && request.resource.data.deleted == null;
+      allow update: if isMaster() && can('masters.edit')
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.updatedBy == email()
+        // soft-delete ke liye reason zaroori; wapas laana sirf Admin
+        && (request.resource.data.deleted == null
+              ? (resource.data.deleted == null || can('recycle.restore'))
+              : (request.resource.data.deleted.reason is string && request.resource.data.deleted.reason.size() >= 3));
+      allow delete: if false;
+    }
+
+    // ---------- project ----------
+    match /projects/{pid} {
+      allow read: if member(pid);
+      allow write: if isAdmin();
+
+      // Phone se aane wali entries (movements)
+      match /{col}/{id} {
+        function isEntryCol() {
+          return col in ['stockMoves', 'machineLogs', 'machineDeductions', 'labourMuster', 'staffAttendance',
+                         'staffPassbook', 'workEntries', 'storeMoves', 'ledger', 'photos'];
+        }
+        function nd() {
+          return request.resource.data;
+        }
+
+        allow read: if isEntryCol() && member(pid);
+
+        allow create: if isEntryCol() && member(pid) && can('entry.create')
+          && nd().projectId == pid
+          && dateOpen(pid, nd().businessDate)
+          && nd().createdBy == email()
+          && nd().createdAt == request.time
+          && nd().rev == 1
+          && nd().deleted == null
+          && nd().serverStatus == 'PENDING'
+          && auditMatches(pid, col, id, 'CREATE');
+
+        allow update: if isEntryCol() && member(pid)
+          && dateOpen(pid, resource.data.businessDate)
+          && dateOpen(pid, nd().businessDate)
+          && nd().projectId == resource.data.projectId
+          && nd().createdBy == resource.data.createdBy
+          && nd().createdAt == resource.data.createdAt
+          && nd().updatedBy == email()
+          && nd().updatedAt == request.time
+          && nd().rev == resource.data.rev + 1
+          && nd().serverStatus == 'PENDING'
+          && (
+            // seedha edit
+            (resource.data.deleted == null && nd().deleted == null && can('entry.edit')
+              && auditMatches(pid, col, id, 'UPDATE'))
+            // soft-delete (reason ke saath)
+            || (resource.data.deleted == null && nd().deleted != null && can('entry.delete')
+              && nd().deleted.by == email() && nd().deleted.reason is string && nd().deleted.reason.size() >= 3
+              && auditMatches(pid, col, id, 'DELETE'))
+            // Recycle Bin se wapas — sirf Admin
+            || (resource.data.deleted != null && nd().deleted == null && can('recycle.restore')
+              && auditMatches(pid, col, id, 'RESTORE'))
+          );
+
+        allow delete: if false;
+      }
+
+      // Audit / Edit History — sirf naya banta hai, koi (Admin bhi) badal / mita nahi sakta
+      match /auditLog/{id} {
+        allow read: if can('audit.read') && member(pid);
+        allow create: if member(pid)
+          && request.resource.data.by == email()
+          && request.resource.data.at == request.time
+          && request.resource.data.action in ['CREATE', 'UPDATE', 'DELETE', 'RESTORE', 'OPEN']
+          && (request.resource.data.action in ['CREATE', 'OPEN']
+              || (request.resource.data.reason is string && request.resource.data.reason.size() >= 3));
+        allow update, delete: if false;
+      }
+
+      // Admin ka "din kholna"
+      match /unlocks/{date} {
+        allow read: if member(pid);
+        allow write: if can('day.unlock') && member(pid)
+          && request.resource.data.by == email()
+          && request.resource.data.reason is string && request.resource.data.reason.size() >= 3
+          && request.resource.data.expiresAt is timestamp;
+      }
+
+      // Hisab — sirf server likhta hai
+      match /days/{date} {
+        allow read: if member(pid);
+        allow write: if false;
+      }
+      match /machineBills/{id} {
+        allow read: if member(pid);
+        allow write: if false;
+      }
+      match /dpr/{date}/{rest=**} {
+        allow read: if member(pid);
+        allow write: if false;
+      }
+      match /serverRuns/{id} {
+        allow read: if isAdmin();
+        allow write: if false;
+      }
     }
   }
 }
