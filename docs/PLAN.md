@@ -16,6 +16,13 @@
 
 ---
 
+## Phase 0 — haal (24 Oct 2026) ✅
+- Repo: https://github.com/rohitmishra8880/bpmc-site-app (private) — commit `c2abce3`
+- Firebase `bpmc-site-test`: Spark, Firestore asia-south1, Google login ON. `bpmc-site-live` abhi baaki.
+- Apps Script "BPMC Server (test)" + Sheet bana; Firestore REST connection verified (404 NOT_FOUND = access theek).
+- Tests 2/2 pass, web build pass, emulator (JDK 21) pass — sab cache D: par.
+- Obsidian: teeno vault ke `Memory\2026-10-24 app-phase0.json` likha (EMRS KESHKAL vault naya bana).
+
 ## 0. Setup ka haal
 
 | Cheez | Haal |
