@@ -1,0 +1,605 @@
+<title>BPMC Site Board</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Mukta:wght@400;500;600;700&family=Teko:wght@500;600&display=swap">
+<style>
+/* Layout: phone par "site board" — upar haalat, beech mein bade number, neeche bade button + tab bar.
+   Laptop par baayein sidebar, beech mein 3 column. Peela-kaala hazard patti = site ki pehchaan. */
+:root {
+  --bg: #eef1f4;
+  --surface: #ffffff;
+  --surface-2: #f6f8fa;
+  --ink: #14202b;
+  --muted: #5a6a79;
+  --line: #d6dde4;
+  --accent: #f2b705;      /* safety yellow — sirf fill, text nahi */
+  --accent-ink: #14202b;
+  --ok: #1d8a4c;
+  --warn: #b85f00;
+  --crit: #c62828;
+  --ok-bg: #e4f4ea;
+  --warn-bg: #fff1dc;
+  --crit-bg: #fde7e6;
+  --font-body: "Mukta", "Nirmala UI", "Segoe UI", system-ui, sans-serif;
+  --font-num: "Teko", "Mukta", "Arial Narrow", sans-serif;
+  --r: 10px;
+  --tap: 52px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e161e; --surface: #16212c; --surface-2: #1b2835; --ink: #e7edf2; --muted: #93a4b4; --line: #26384a;
+    --accent: #ffc629; --accent-ink: #14202b; --ok: #3cc077; --warn: #ffa94a; --crit: #ff6159;
+    --ok-bg: #12301f; --warn-bg: #36260f; --crit-bg: #3a1716; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e161e; --surface: #16212c; --surface-2: #1b2835; --ink: #e7edf2; --muted: #93a4b4; --line: #26384a;
+  --accent: #ffc629; --accent-ink: #14202b; --ok: #3cc077; --warn: #ffa94a; --crit: #ff6159;
+  --ok-bg: #12301f; --warn-bg: #36260f; --crit-bg: #3a1716; color-scheme: dark;
+}
+/* Dhoop mode: dhoop mein padhne ke liye ekdum safed + gehra kaala */
+:root[data-theme="sun"] {
+  --bg: #ffffff; --surface: #ffffff; --surface-2: #f2f2f2; --ink: #000000; --muted: #2b2b2b; --line: #000000;
+  --ok: #006b2c; --warn: #8a4200; --crit: #a00000; --ok-bg: #d9f2e2; --warn-bg: #ffe6c4; --crit-bg: #ffd6d4; color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+}
+button, select, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+.demo-band {
+  background: var(--accent); color: var(--accent-ink); font-weight: 600; font-size: 14px; text-align: center;
+  padding-block: 6px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+
+.app { display: grid; grid-template-columns: 1fr; min-height: 100%; }
+.side { display: none; }
+
+/* ---------- header ---------- */
+.top {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
+.top-inner {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding-block: 10px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.hazard { height: 6px; background: repeating-linear-gradient(-45deg, var(--accent) 0 12px, var(--ink) 12px 24px); }
+.site-switch {
+  display: flex; flex-direction: column; align-items: flex-start; background: none; border: 0; padding: 0; text-align: left; min-width: 0;
+}
+.site-switch .name { font-weight: 700; font-size: 18px; line-height: 1.1; }
+.site-switch .name::after { content: " ▾"; color: var(--muted); font-weight: 500; }
+.site-switch .date { color: var(--muted); font-size: 14px; }
+.top .spacer { flex: 1; }
+.pill { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 3px 10px; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.pill.ok { background: var(--ok-bg); color: var(--ok); }
+.pill.warn { background: var(--warn-bg); color: var(--warn); }
+.pill.crit { background: var(--crit-bg); color: var(--crit); }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.icon-btn {
+  min-width: 44px; height: 44px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2);
+  display: inline-flex; align-items: center; justify-content: center; gap: 4px; font-weight: 600; font-size: 14px; padding-inline: 10px; position: relative;
+}
+.badge { position: absolute; top: -6px; right: -6px; background: var(--crit); color: #fff; font-size: 12px; border-radius: 999px; min-width: 20px; height: 20px; display: grid; place-items: center; padding-inline: 5px; }
+
+/* ---------- main ---------- */
+main {
+  display: grid; gap: 16px; padding-block: 16px 110px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  max-width: 1280px; width: 100%; margin-inline: auto;
+}
+.screen { display: grid; gap: 16px; }
+h2 { font-size: 15px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 0; }
+.section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.link { background: none; border: 0; color: var(--ink); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; padding: 6px 0; font-size: 14px; }
+
+/* alerts */
+.alerts { display: grid; gap: 8px; }
+.alert {
+  display: grid; grid-template-columns: 6px 1fr auto; gap: 12px; align-items: center; background: var(--surface);
+  border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px 10px 0; overflow: hidden; text-align: left; width: 100%;
+}
+.alert .stripe { align-self: stretch; }
+.alert.crit .stripe { background: var(--crit); }
+.alert.warn .stripe { background: var(--warn); }
+.alert b { display: block; font-size: 16px; }
+.alert span { color: var(--muted); font-size: 14px; }
+.alert .go { color: var(--muted); font-size: 20px; }
+
+/* KPI tiles */
+.kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.kpi {
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 12px; text-align: left;
+  display: grid; gap: 2px; align-content: start; min-height: 128px; transition: border-color .15s;
+}
+.kpi:hover { border-color: var(--ink); }
+.kpi .label { font-size: 14px; font-weight: 600; color: var(--muted); }
+.kpi .big { font-family: var(--font-num); font-size: 46px; font-weight: 600; line-height: 0.95; margin-top: 4px; }
+.kpi .big small { font-family: var(--font-body); font-size: 15px; font-weight: 600; color: var(--muted); margin-left: 4px; }
+.kpi .sub { font-size: 13px; color: var(--muted); }
+.kpi .bar { height: 6px; background: var(--surface-2); border-radius: 3px; overflow: hidden; margin-top: 6px; }
+.kpi .bar i { display: block; height: 100%; background: var(--ink); }
+.kpi.attn { border-color: var(--crit); }
+
+/* quick actions */
+.quick { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.qa {
+  min-height: 76px; border-radius: var(--r); border: 1px solid var(--line); background: var(--surface);
+  display: grid; place-items: center; gap: 2px; font-weight: 600; font-size: 14px; padding: 8px 4px; text-align: center;
+}
+.qa .ic { font-size: 24px; line-height: 1; }
+.qa.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+/* tables */
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.scroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 15px; }
+th, td { padding: 10px 12px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--line); }
+th:first-child, td:first-child { text-align: left; }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; background: var(--surface-2); }
+tr:last-child td { border-bottom: 0; }
+td.bal { font-weight: 700; }
+.unit { color: var(--muted); font-size: 13px; margin-left: 3px; }
+.low { color: var(--crit); }
+tr.clickable { cursor: pointer; }
+tr.clickable:hover td { background: var(--surface-2); }
+
+.labour { display: grid; gap: 8px; padding: 12px; }
+.lab-row { display: grid; grid-template-columns: minmax(0, 1fr) repeat(3, 56px) 60px; gap: 6px; align-items: center; font-size: 15px; }
+.lab-row.head { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+.lab-row > :not(:first-child) { text-align: right; }
+.lab-row.total { border-top: 1px solid var(--line); padding-top: 8px; font-weight: 700; }
+
+.activity { display: grid; }
+.act { display: grid; grid-template-columns: 52px 1fr; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--line); font-size: 15px; }
+.act:last-child { border-bottom: 0; }
+.act time { color: var(--muted); font-size: 13px; padding-top: 2px; }
+.act .who { color: var(--muted); font-size: 13px; }
+
+.grid-2 { display: grid; gap: 16px; }
+
+/* ---------- forms ---------- */
+.form { display: grid; gap: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; }
+.form h3 { margin: 0; font-size: 22px; }
+.field { display: grid; gap: 6px; }
+.field > label, .field > .lbl { font-weight: 600; font-size: 15px; }
+.hint { color: var(--muted); font-size: 13px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  min-height: var(--tap); padding-inline: 16px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--surface-2);
+  font-weight: 600; display: inline-flex; align-items: center; gap: 6px;
+}
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.chip.st-ok[aria-pressed="true"] { background: var(--ok); border-color: var(--ok); color: #fff; }
+.chip.st-crit[aria-pressed="true"] { background: var(--crit); border-color: var(--crit); color: #fff; }
+.chip.st-warn[aria-pressed="true"] { background: var(--warn); border-color: var(--warn); color: #fff; }
+.input, select.input, textarea.input {
+  min-height: var(--tap); border-radius: 10px; border: 1.5px solid var(--line); background: var(--surface-2); padding: 10px 12px; width: 100%;
+}
+.input.num { font-family: var(--font-num); font-size: 32px; line-height: 1; padding-block: 8px 4px; }
+.row-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.calc {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;
+  background: var(--surface-2); border-radius: 10px; padding: 10px 12px; border: 1px dashed var(--line);
+}
+.calc b { font-family: var(--font-num); font-size: 30px; font-weight: 600; line-height: 1; }
+.btn-row { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; }
+.btn { min-height: 56px; border-radius: 12px; font-weight: 700; font-size: 17px; border: 1.5px solid var(--line); background: var(--surface-2); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.copy-last { justify-self: start; }
+
+/* ---------- bottom tab bar (phone) ---------- */
+.tabbar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; background: var(--surface); border-top: 1px solid var(--line);
+  display: grid; grid-template-columns: repeat(5, 1fr);
+  padding-bottom: env(safe-area-inset-bottom, 0px); padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px);
+}
+.tab { background: none; border: 0; min-height: 64px; display: grid; place-items: center; gap: 0; font-size: 12px; font-weight: 600; color: var(--muted); padding-block: 6px; }
+.tab .ic { font-size: 22px; line-height: 1.1; }
+.tab[aria-current="page"] { color: var(--ink); }
+.tab[aria-current="page"] .ic { background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 2px 14px; }
+.tab.plus .ic { background: var(--ink); color: var(--bg); border-radius: 14px; padding: 6px 14px; }
+
+/* ---------- drawer (card ka poora hisab) ---------- */
+.drawer-bg { position: fixed; inset: 0; background: rgb(0 0 0 / 0.45); z-index: 20; }
+.drawer {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 21; background: var(--surface); border-radius: 16px 16px 0 0;
+  max-height: 80%; overflow: auto; border-top: 4px solid var(--accent);
+  padding-block: 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.drawer h3 { margin: 0 0 4px; font-size: 20px; }
+.drawer .formula { font-family: var(--font-num); font-size: 30px; line-height: 1.1; margin: 8px 0 12px; }
+.drawer .close { float: right; }
+
+.toast {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(84px + env(safe-area-inset-bottom, 0px)); z-index: 30;
+  background: var(--ink); color: var(--bg); padding: 12px 16px; border-radius: 12px; font-weight: 600; max-width: calc(100% - 32px);
+}
+
+/* ---------- laptop ---------- */
+@media (min-width: 1000px) {
+  .app { grid-template-columns: 240px 1fr; }
+  .side {
+    display: grid; align-content: start; gap: 4px; background: var(--surface); border-right: 1px solid var(--line);
+    padding: 16px 12px; position: sticky; top: 0; height: 100vh;
+  }
+  .brand { font-family: var(--font-num); font-size: 30px; font-weight: 600; line-height: 1; padding: 4px 10px 12px; }
+  .brand small { display: block; font-family: var(--font-body); font-size: 12px; color: var(--muted); font-weight: 600; letter-spacing: 0.04em; }
+  .nav { background: none; border: 0; text-align: left; padding: 10px; border-radius: 8px; font-weight: 600; display: flex; gap: 10px; align-items: center; }
+  .nav[aria-current="page"] { background: var(--accent); color: var(--accent-ink); }
+  .nav:hover:not([aria-current="page"]) { background: var(--surface-2); }
+  .tabbar { display: none; }
+  main { padding-bottom: 32px; }
+  .kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .quick { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .grid-2 { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); align-items: start; }
+  .forms-wide { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+  .drawer { left: auto; right: 24px; bottom: 24px; width: 440px; border-radius: 16px; }
+  .toast { bottom: 24px; }
+}
+</style>
+
+<div class="demo-band" data-en="DESIGN SAMPLE — numbers are examples, not real site data" data-hi="नमूना डिज़ाइन — सब नंबर उदाहरण हैं, असली साइट डेटा नहीं">NAMOONA DESIGN — saare number udaharan hain, asli site data nahi</div>
+
+<div class="app">
+  <aside class="side" aria-label="Menu">
+    <div class="brand">BPMC<small>B.P. MISHRA &amp; CO.</small></div>
+    <button class="nav" data-go="dash" aria-current="page">▦ <span data-en="Dashboard" data-hi="डैशबोर्ड">Dashboard</span></button>
+    <button class="nav" data-go="diesel">⛽ <span data-en="Diesel / Material" data-hi="डीज़ल / माल">Diesel / Maal</span></button>
+    <button class="nav" data-go="machine">🚜 <span data-en="Machinery" data-hi="मशीनरी">Machinery</span></button>
+    <button class="nav" disabled>👷 <span data-en="Attendance" data-hi="हाज़री">Haazri</span></button>
+    <button class="nav" disabled>🧰 <span data-en="Store Register" data-hi="सामान रजिस्टर">Saman Register</span></button>
+    <button class="nav" disabled>📐 <span data-en="Daily Work" data-hi="रोज़ का काम">Roz ka kaam</span></button>
+    <button class="nav" disabled>📒 <span data-en="Party Ledger" data-hi="पार्टी खाता">Party Khata</span></button>
+    <button class="nav" disabled>📄 DPR</button>
+  </aside>
+
+  <div>
+    <header class="top">
+      <div class="top-inner">
+        <button class="site-switch" aria-label="Site badlo">
+          <span class="name">EMRS Keshkal</span>
+          <span class="date">Shanivar, 24 Oct 2026</span>
+        </button>
+        <span class="spacer"></span>
+        <span class="pill ok" title="Sab entry server tak pahunch gayi"><span class="dot"></span><span data-en="Synced · hisab 2 min ago" data-hi="सिंक · हिसाब 2 मिनट पहले">Synced · hisab 2 min pehle</span></span>
+        <button class="icon-btn" id="lang" aria-label="Bhasha badlo">अ / A</button>
+        <button class="icon-btn" id="theme" aria-label="Rang badlo (light / dark / dhoop)">◐</button>
+        <button class="icon-btn" aria-label="3 alert">🔔<span class="badge">3</span></button>
+      </div>
+      <div class="hazard" aria-hidden="true"></div>
+    </header>
+
+    <main>
+      <!-- ===================== DASHBOARD ===================== -->
+      <section class="screen" id="scr-dash">
+        <div class="alerts" aria-label="Zaroori alert">
+          <button class="alert crit" data-sheet="breakdown"><span class="stripe"></span>
+            <div><b>JCB-01 breakdown — 11:20 se band</b><span>Hydraulic pipe phata · Driver: Ramesh · 3h 40m ho gaye</span></div><span class="go">›</span></button>
+          <button class="alert warn" data-sheet="cement"><span class="stripe"></span>
+            <div><b>Cement 42 Bags bacha — limit 50</b><span>Kal ki khapat 38 Bags · kal tak khatam ho sakta hai</span></div><span class="go">›</span></button>
+          <button class="alert warn" data-sheet="rcm"><span class="stripe"></span>
+            <div><b>Rod cutter RCM-01 — Suraj ke paas 9 din se</b><span>Issue 15 Oct · wapas nahi aaya</span></div><span class="go">›</span></button>
+        </div>
+
+        <div class="kpis">
+          <button class="kpi" data-sheet="labour">
+            <span class="label" data-en="Labour today" data-hi="आज की हाज़री">Aaj ki haazri</span>
+            <span class="big">58<small>log</small></span>
+            <span class="sub">Mistri 11 · Kuli 31 · Reja 16</span>
+          </button>
+          <button class="kpi" data-sheet="diesel">
+            <span class="label" data-en="Diesel balance" data-hi="डीज़ल बाकी">Diesel baaki</span>
+            <span class="big">646<small>Ltr</small></span>
+            <span class="sub">246 + 600 aaya − 200 diya</span>
+            <span class="bar" aria-hidden="true"><i style="width:65%"></i></span>
+          </button>
+          <button class="kpi attn" data-sheet="machines">
+            <span class="label" data-en="Machines running" data-hi="चालू मशीन">Chalu machine</span>
+            <span class="big">3<small>/ 4</small></span>
+            <span class="sub" style="color:var(--crit)">JCB-01 breakdown</span>
+          </button>
+          <button class="kpi" data-sheet="work">
+            <span class="label" data-en="Concrete today" data-hi="आज कंक्रीट">Aaj concrete</span>
+            <span class="big">120.50<small>M³</small></span>
+            <span class="sub">Raft B-block · M25</span>
+          </button>
+        </div>
+
+        <div class="quick" aria-label="Jaldi entry">
+          <button class="qa primary" data-go="diesel"><span class="ic">⛽</span><span data-en="Diesel" data-hi="डीज़ल">Diesel</span></button>
+          <button class="qa" data-go="machine"><span class="ic">🚜</span><span data-en="Machine log" data-hi="मशीन लॉग">Machine log</span></button>
+          <button class="qa"><span class="ic">👷</span><span data-en="Labour" data-hi="हाज़री">Haazri</span></button>
+          <button class="qa"><span class="ic">🧱</span><span data-en="Material in" data-hi="माल आया">Maal aaya</span></button>
+          <button class="qa"><span class="ic">🧰</span><span data-en="Tool issue" data-hi="सामान दिया">Saman diya</span></button>
+          <button class="qa"><span class="ic">📷</span><span data-en="Photo" data-hi="फोटो">Photo</span></button>
+        </div>
+
+        <div class="grid-2">
+          <div class="screen">
+            <div class="section-head"><h2 data-en="Material stock" data-hi="माल का स्टॉक">Maal ka stock</h2><button class="link">Poora register</button></div>
+            <div class="panel scroll">
+              <table>
+                <thead><tr><th>Item</th><th data-en="Old" data-hi="पुराना">Purana</th><th data-en="In" data-hi="आया">Aaya</th><th data-en="Used" data-hi="खर्च">Kharch</th><th data-en="Balance" data-hi="बाकी">Baaki</th></tr></thead>
+                <tbody>
+                  <tr class="clickable" data-sheet="diesel"><td>Diesel</td><td>246</td><td>600</td><td>200</td><td class="bal">646<span class="unit">Ltr</span></td></tr>
+                  <tr class="clickable" data-sheet="cement"><td>Cement</td><td>30</td><td>50</td><td>38</td><td class="bal low">42<span class="unit">Bags</span></td></tr>
+                  <tr><td>Gitti 20mm</td><td>0</td><td>50</td><td>30</td><td class="bal">20<span class="unit">cu.m</span></td></tr>
+                  <tr><td>Reti</td><td>34</td><td>0</td><td>12.5</td><td class="bal">21.5<span class="unit">cu.m</span></td></tr>
+                  <tr><td>Steel (TMT)</td><td>48.150</td><td>0</td><td>2.420</td><td class="bal">45.730<span class="unit">MT</span></td></tr>
+                  <tr><td>Engine oil 15W-40</td><td>60</td><td>0</td><td>7.5</td><td class="bal">52.5<span class="unit">Ltr</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="section-head"><h2>Machinery</h2><button class="link">Rental report</button></div>
+            <div class="panel scroll">
+              <table>
+                <thead><tr><th>Machine</th><th>SR</th><th>CR</th><th data-en="Hours" data-hi="घंटे">Ghante</th><th>Diesel</th><th>Status</th></tr></thead>
+                <tbody>
+                  <tr><td>Poclain PC-210</td><td>2944.0</td><td>2951.8</td><td>7h 48m</td><td>86 L</td><td><span class="pill ok">Full</span></td></tr>
+                  <tr><td>JCB-01</td><td>5120.4</td><td>5123.1</td><td>2h 42m</td><td>24 L</td><td><span class="pill crit">Breakdown</span></td></tr>
+                  <tr><td>Transit mixer TM-2</td><td>871.0</td><td>875.5</td><td>4h 30m</td><td>40 L</td><td><span class="pill warn">Half</span></td></tr>
+                  <tr><td>DG set 62.5 kVA</td><td>1402.0</td><td>1408.0</td><td>6h 0m</td><td>50 L</td><td><span class="pill ok">Full</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="screen">
+            <div class="section-head"><h2 data-en="Labour by contractor" data-hi="ठेकेदार वार हाज़री">Thekedar-wise haazri</h2></div>
+            <div class="panel labour">
+              <div class="lab-row head"><span>Thekedar</span><span>Mistri</span><span>Kuli</span><span>Reja</span><span>Kul</span></div>
+              <div class="lab-row"><span>Company</span><span>4</span><span>9</span><span>5</span><span>18</span></div>
+              <div class="lab-row"><span>Suraj</span><span>5</span><span>14</span><span>7</span><span>26</span></div>
+              <div class="lab-row"><span>Hemlal</span><span>2</span><span>8</span><span>4</span><span>14</span></div>
+              <div class="lab-row total"><span>Kul</span><span>11</span><span>31</span><span>16</span><span>58</span></div>
+            </div>
+
+            <div class="section-head"><h2 data-en="Recent activity" data-hi="हाल की एंट्री">Haal ki entry</h2></div>
+            <div class="panel activity">
+              <div class="act"><time>14:52</time><div>Diesel 86 L → Poclain PC-210<div class="who">Munshi Dinesh · phone</div></div></div>
+              <div class="act"><time>13:10</time><div>Cement 50 Bags aaya · Agrawal Traders · Udhaar<div class="who">Site Incharge Anil · khate mein bill bana</div></div></div>
+              <div class="act"><time>11:24</time><div>JCB-01 breakdown darj<div class="who">Munshi Dinesh · alert gaya</div></div></div>
+              <div class="act"><time>09:05</time><div>Haazri — Suraj 26 log<div class="who">Munshi Dinesh</div></div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== DIESEL ENTRY ===================== -->
+      <section class="screen" id="scr-diesel" hidden>
+        <div class="screen forms-wide">
+          <form class="form" id="f-diesel" novalidate>
+            <h3 data-en="Diesel entry" data-hi="डीज़ल एंट्री">Diesel entry</h3>
+            <button type="button" class="chip copy-last" id="copy-diesel">↺ <span data-en="Copy yesterday's entry" data-hi="कल जैसी एंट्री">Kal jaisi entry</span></button>
+
+            <div class="field">
+              <span class="lbl" data-en="What happened?" data-hi="क्या हुआ?">Kya hua?</span>
+              <div class="chips" role="group" aria-label="Kya hua">
+                <button type="button" class="chip" aria-pressed="false" data-grp="dtype">⬇ <span data-en="Received" data-hi="आया">Aaya</span></button>
+                <button type="button" class="chip" aria-pressed="true" data-grp="dtype">⬆ <span data-en="Issued to machine" data-hi="मशीन को दिया">Machine ko diya</span></button>
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="d-machine" data-en="Machine" data-hi="मशीन">Machine</label>
+              <select class="input" id="d-machine">
+                <option>Poclain PC-210</option><option>JCB-01</option><option>Transit mixer TM-2</option><option>DG set 62.5 kVA</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="d-qty" data-en="Quantity" data-hi="मात्रा">Kitna</label>
+              <div class="row-2">
+                <input class="input num" id="d-qty" inputmode="decimal" value="86" aria-describedby="d-qty-hint">
+                <div class="chips" role="group" aria-label="Unit">
+                  <button type="button" class="chip" aria-pressed="true" data-grp="dunit">Ltr</button>
+                  <button type="button" class="chip" aria-pressed="false" data-grp="dunit">Bucket 20L</button>
+                  <button type="button" class="chip" aria-pressed="false" data-grp="dunit">Drum 210L</button>
+                </div>
+              </div>
+              <span class="hint" id="d-qty-hint">Abhi stock: 646 Ltr (server ka aakhri hisab)</span>
+            </div>
+
+            <div class="field">
+              <label for="d-remark">Remark <span class="hint">(zaroori nahi)</span></label>
+              <input class="input" id="d-remark" placeholder="jaise: shaam ki shift ke liye">
+            </div>
+
+            <div class="btn-row">
+              <button type="button" class="btn" data-go="dash" data-en="Cancel" data-hi="रद्द">Radd</button>
+              <button type="submit" class="btn primary" data-en="Save" data-hi="सेव करो">Save karo</button>
+            </div>
+          </form>
+
+          <div class="panel">
+            <div class="act"><time>Niyam</time><div>Machine ko diya diesel <b>yahin ek baar</b> darj hota hai — Inventory, Machinery, Dashboard aur DPR sab isi se. Teen jagah alag number nahi banega.</div></div>
+            <div class="act"><time>Lock</time><div>24 Oct ki entry <b>26 Oct raat 11:59</b> tak badal sakte ho (reason ke saath). Uske baad sirf Admin khol sakta hai.</div></div>
+            <div class="act"><time>Offline</time><div>Network na ho to entry phone mein rukegi, network aate hi khud chali jayegi.</div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== MACHINE LOG ===================== -->
+      <section class="screen" id="scr-machine" hidden>
+        <div class="screen forms-wide">
+          <form class="form" id="f-machine" novalidate>
+            <h3 data-en="Machine log" data-hi="मशीन लॉग">Machine log</h3>
+
+            <div class="field">
+              <label for="m-machine">Machine</label>
+              <select class="input" id="m-machine">
+                <option>Poclain PC-210 · Gupta Earthmovers · ₹1,00,000/mahina</option>
+                <option>JCB-01 · Sahu Transport · ₹1,200/ghanta</option>
+                <option>Transit mixer TM-2 · ₹8,000/din</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <span class="lbl" data-en="Today's run" data-hi="आज कैसी चली">Aaj kaisi chali</span>
+              <div class="chips" role="group" aria-label="Status">
+                <button type="button" class="chip st-ok" aria-pressed="true" data-grp="mst">Full</button>
+                <button type="button" class="chip st-warn" aria-pressed="false" data-grp="mst">Half</button>
+                <button type="button" class="chip st-warn" aria-pressed="false" data-grp="mst" data-en="Hours" data-hi="घंटे">Ghante</button>
+                <button type="button" class="chip st-crit" aria-pressed="false" data-grp="mst">Breakdown</button>
+                <button type="button" class="chip" aria-pressed="false" data-grp="mst">Absent</button>
+              </div>
+            </div>
+
+            <div class="row-2">
+              <div class="field">
+                <label for="m-sr">SR <span class="hint">(kal ka CR)</span></label>
+                <input class="input num" id="m-sr" inputmode="decimal" value="2944.0">
+              </div>
+              <div class="field">
+                <label for="m-cr">CR</label>
+                <input class="input num" id="m-cr" inputmode="decimal" value="2951.8">
+              </div>
+            </div>
+            <div class="calc" aria-live="polite">
+              <span data-en="Hours (check only — server confirms)" data-hi="घंटे (जाँच — पक्का हिसाब सर्वर)">Ghante (jaanch — pakka hisab server)</span><b id="m-hours">7h 48m</b>
+            </div>
+
+            <div class="field">
+              <label for="m-diesel">Diesel <span class="hint">(Ltr — yahin se stock ghatega)</span></label>
+              <input class="input num" id="m-diesel" inputmode="decimal" value="86">
+            </div>
+
+            <div class="btn-row">
+              <button type="button" class="btn" data-go="dash" data-en="Cancel" data-hi="रद्द">Radd</button>
+              <button type="submit" class="btn primary" data-en="Save" data-hi="सेव करो">Save karo</button>
+            </div>
+          </form>
+
+          <div class="panel">
+            <div class="section-head" style="padding:12px 12px 0"><h2>Is mahine ka bill (Poclain)</h2></div>
+            <table>
+              <tbody>
+                <tr><td>Monthly rate</td><td>₹1,00,000.00</td></tr>
+                <tr><td>Breakdown 2 din × ₹3,333.33</td><td>−₹6,666.67</td></tr>
+                <tr><td>Owner ko advance</td><td>−₹15,000.00</td></tr>
+                <tr><td>Driver advance</td><td>−₹2,000.00</td></tr>
+                <tr><td>Site se repair saman</td><td>−₹3,000.00</td></tr>
+                <tr><td><b>Dena</b></td><td class="bal">₹73,333.33</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<nav class="tabbar" aria-label="Neeche ka menu">
+  <button class="tab" data-go="dash" aria-current="page"><span class="ic">▦</span><span data-en="Home" data-hi="होम">Dashboard</span></button>
+  <button class="tab" data-go="diesel"><span class="ic">⛽</span><span data-en="Stock" data-hi="स्टॉक">Stock</span></button>
+  <button class="tab plus" data-go="machine"><span class="ic">＋</span><span data-en="Entry" data-hi="एंट्री">Entry</span></button>
+  <button class="tab"><span class="ic">📄</span>DPR</button>
+  <button class="tab"><span class="ic">☰</span><span data-en="More" data-hi="और">Aur</span></button>
+</nav>
+
+<div class="drawer-bg" id="drawer-bg" hidden></div>
+<div class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="dr-title" hidden>
+  <button class="icon-btn close" id="dr-close" aria-label="Band karo">✕</button>
+  <h3 id="dr-title"></h3>
+  <div class="hint" id="dr-sub"></div>
+  <div class="formula" id="dr-formula"></div>
+  <div class="panel scroll"><table><tbody id="dr-rows"></tbody></table></div>
+</div>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+(function () {
+  // Card dabao → wahi entries jinse number bana (purane app ki galti #1, #4 kabhi nahi)
+  const SHEETS = {
+    diesel: { t: "Diesel — 24 Oct 2026", s: "Kal ka closing = aaj ka opening", f: "246 + 600 − 200 = 646 Ltr",
+      rows: [["Opening (23 Oct closing)", "246 L"], ["08:40 Aaya · Shree Fuels · bill 4471", "+600 L"], ["10:15 Poclain PC-210", "−86 L"], ["11:05 JCB-01", "−24 L"], ["12:30 Transit mixer TM-2", "−40 L"], ["14:52 DG set", "−50 L"], ["Closing", "646 L"]] },
+    labour: { t: "Haazri — 24 Oct 2026", s: "Thekedar-wise muster se", f: "11 + 31 + 16 = 58",
+      rows: [["Company", "4 · 9 · 5 = 18"], ["Suraj", "5 · 14 · 7 = 26"], ["Hemlal", "2 · 8 · 4 = 14"]] },
+    machines: { t: "Machine — aaj", s: "Machine log se", f: "3 chalu · 1 breakdown",
+      rows: [["Poclain PC-210", "Full · 7h 48m"], ["JCB-01", "Breakdown 11:20 se"], ["Transit mixer TM-2", "Half · 4h 30m"], ["DG set 62.5 kVA", "Full · 6h 0m"]] },
+    work: { t: "Concrete — 24 Oct 2026", s: "L × W × H = M³", f: "10 × 5 × 2.41 = 120.50 M³",
+      rows: [["Raft B-block (M25)", "120.50 M³"], ["Photo", "3 · GPS ke saath"]] },
+    breakdown: { t: "JCB-01 breakdown", s: "Breakdown register", f: "11:20 se · 3h 40m",
+      rows: [["Kaaran", "Hydraulic pipe phata"], ["Darj kiya", "Munshi Dinesh · 11:24"], ["Rental", "Aaj ₹0 (breakdown)"]] },
+    cement: { t: "Cement", s: "Limit 50 Bags (Settings)", f: "30 + 50 − 38 = 42 Bags",
+      rows: [["Opening", "30 Bags"], ["Agrawal Traders · Udhaar", "+50 Bags"], ["Raft B-block", "−38 Bags"]] },
+    rcm: { t: "RCM-01 Rod cutter", s: "Returnable saman", f: "Suraj ke paas · 9 din",
+      rows: [["Issue", "15 Oct · Suraj · bar bending"], ["Haalat (issue par)", "Theek"], ["Wapas", "Abhi nahi"]] }
+  };
+  const $ = (id) => document.getElementById(id);
+
+  function openSheet(k) {
+    const d = SHEETS[k]; if (!d) return;
+    $("dr-title").textContent = d.t; $("dr-sub").textContent = d.s; $("dr-formula").textContent = d.f;
+    $("dr-rows").innerHTML = d.rows.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join("");
+    $("drawer").hidden = false; $("drawer-bg").hidden = false; $("dr-close").focus();
+  }
+  function closeSheet() { $("drawer").hidden = true; $("drawer-bg").hidden = true; }
+  $("dr-close").addEventListener("click", closeSheet);
+  $("drawer-bg").addEventListener("click", closeSheet);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheet(); });
+
+  function go(name) {
+    ["dash", "diesel", "machine"].forEach((s) => { $("scr-" + s).hidden = s !== name; });
+    document.querySelectorAll("[data-go]").forEach((b) => {
+      if (b.classList.contains("tab") || b.classList.contains("nav")) {
+        if (b.dataset.go === name) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
+      }
+    });
+    window.scrollTo(0, 0);
+  }
+
+  document.addEventListener("click", (e) => {
+    const el = e.target.closest("[data-sheet],[data-go],[data-grp]");
+    if (!el) return;
+    if (el.dataset.sheet) openSheet(el.dataset.sheet);
+    else if (el.dataset.go) go(el.dataset.go);
+    else if (el.dataset.grp) {
+      document.querySelectorAll(`[data-grp="${el.dataset.grp}"]`).forEach((b) => b.setAttribute("aria-pressed", String(b === el)));
+    }
+  });
+
+  let toastT;
+  function toast(msg) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => (t.hidden = true), 3200); }
+  ["f-diesel", "f-machine"].forEach((id) => $(id).addEventListener("submit", (e) => { e.preventDefault(); toast("Save ho gaya ✓ · server hisab kar raha hai ⏳"); go("dash"); }));
+  $("copy-diesel").addEventListener("click", () => { $("d-qty").value = "86"; toast("Kal ki entry bhar di — badal ke Save karo"); });
+
+  function hrs() {
+    const sr = parseFloat($("m-sr").value), cr = parseFloat($("m-cr").value);
+    if (!isFinite(sr) || !isFinite(cr)) { $("m-hours").textContent = "—"; return; }
+    if (cr < sr) { $("m-hours").textContent = "CR < SR ?"; return; }
+    const h = Math.round((cr - sr) * 100) / 100; let H = Math.floor(h), M = Math.round((h - H) * 60); if (M === 60) { H++; M = 0; }
+    $("m-hours").textContent = `${H}h ${M}m`;
+  }
+  $("m-sr").addEventListener("input", hrs); $("m-cr").addEventListener("input", hrs);
+
+  // Hindi / English / Hinglish
+  const LANGS = ["hinglish", "hi", "en"]; let li = 0;
+  const orig = new Map();
+  document.querySelectorAll("[data-en]").forEach((el) => orig.set(el, el.textContent));
+  $("lang").addEventListener("click", () => {
+    li = (li + 1) % LANGS.length; const L = LANGS[li];
+    document.querySelectorAll("[data-en]").forEach((el) => { el.textContent = L === "hinglish" ? orig.get(el) : el.dataset[L]; });
+    toast(L === "hi" ? "हिंदी" : L === "en" ? "English" : "Hinglish");
+  });
+
+  // Rang: system → dark → light → dhoop
+  const THEMES = [null, "dark", "light", "sun"]; let ti = 0;
+  $("theme").addEventListener("click", () => {
+    ti = (ti + 1) % THEMES.length; const th = THEMES[ti];
+    if (th) document.documentElement.setAttribute("data-theme", th); else document.documentElement.removeAttribute("data-theme");
+    toast(th === "sun" ? "Dhoop mode" : th ? th + " mode" : "Phone jaisa rang");
+  });
+})();
+</script>
