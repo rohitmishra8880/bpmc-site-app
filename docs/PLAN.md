@@ -140,6 +140,9 @@ Roz entry: **runStatus** FULL / HALF / HOUR / BREAKDOWN / ABSENT (+ kyun).
   - Example: 2 din breakdown → 1,00,000 − 6,666.67 = **93,333.33**
   - HALF din = ½ din minus; HOUR = (8 − ghante) ÷ 8 din minus.
   - Minus kabhi 0 se neeche nahi.
+- **Mahine ke beech aayi / gayi ✅ (Rohit):** jitne din site par nahi thi utne din × din-rate minus.
+  - 20 Oct ko aayi → 1,00,000 − (1–19 = 19 din × 3,333.33) = **36,666.67**
+  - 10 Oct ko gayi → 1,00,000 − (11–31 = 21 din) = **30,000**
 
 **Advance / site se liya — bill mein minus** (`machineDeductions`):
 | Type | Example |
@@ -284,8 +287,8 @@ Har phase ke end: test link, kya bana, tests, agla phase, risk + Obsidian `Memor
 
 ---
 
-## 9. Abhi ka sawaal (sirf ek)
-**Mahine ke beech machine aaye / jaaye** (jaise 15 Oct ko aayi): site par rahe dino ke hisab se — (din × monthly ÷ 30), poore mahine ka rate max — theek? Ya koi aur niyam?
+## 9. Khule sawaal
+Abhi koi nahi. (Mahine ke beech machine wala niyam §2.6 mein tay ho gaya.)
 
 ---
 
