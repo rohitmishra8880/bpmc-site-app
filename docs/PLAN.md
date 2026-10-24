@@ -28,7 +28,21 @@
 - ✅ Attendance (TDD): thekedar muster (Company + masters ke thekedar, Mistri / Kuli / Reja), staff P / HD / A (badalne par reason), staff ledger (Advance / Salary / staff ka kharcha); server: days/.labour, days/.staff, staffBalances (din-rate = salary ÷ 30); Dashboard card
 - ✅ Inventory stock calculation saaf number ("0 + 200 − 0")
 - 📌 Rohit: har kaam TDD se (pehle failing test, phir code) + unit + integration; bina maange badlav se pehle poochhna
-- ⏳ Baaki Phase 2: Store / Saman Register, Daily Work + Drive photos, Creditors
+- ✅ Staff + Contractor masters mein poori bank detail (account holder, bank, account no. 9–18 ank, IFSC)
+- ✅ **Labour Attendance bana (TDD — core 93, rules 39, server e2e 24):** weekly sheet, add labour, contractor ka har-hafte tareeka, OT, labour + staff payment (mode / company account / ref), Company bank accounts master, contractor "paisa kaun"; backup / restore / Recycle Bin mein naye collections
+- 📝 **Labour Attendance — design (Rohit ke jawab 24 Oct, OK mila):**
+  - Naam: "Labour muster" → **"Labour attendance"**.
+  - **Labour list** (project-wise): naam, type (Mistri / Kuli / Reja), din ka rate ₹, Aadhaar aakhri 4 (optional), group = Company ya kaunsa contractor. Weekly sheet se hi "＋ Add labour" (wahi detail poochhe).
+  - **Weekly sheet (Mon–Sun):** rows = labour ka naam (type); columns = Mon 21 … Sun 27, har din P / HD / A + OT ghante; daayein: kul din, OT ghante, rate, amount.
+  - **Overtime ✅ ghante mein:** OT paisa = din ka rate ÷ 8 × OT ghante (₹600/din, 2 ghante = ₹150). Amount = din × rate + OT.
+  - **Company labour:** hamesha naam-wise.
+  - **Contractor labour ✅ har hafte poochhe:** us hafte ke liye "Naam-wise" ya "Sirf gin-ti (Mistri / Kuli / Reja + OT)".
+  - **Paisa kaun ✅ dono ho sakta hai:** contractor Master mein "Labour ka paisa: Hum dete hain / Contractor deta hai". Contractor deta hai → sirf record, hamare dene mein nahi judta.
+  - **Hisab ✅ har section mein alag:** labour + staff ka hisab Attendance mein; machine malik ka Machinery mein; supplier ka Creditors mein; contractor ka kaam (Sq M / Sq Ft naap) + advance Daily Work / Creditors mein.
+  - **Har payment / advance ke saath:** tarikh, rakam, mode (Cash / UPI / NEFT / RTGS / Cheque), kis company account se, ref no. / cheque no., remark. Naya master: **Company bank accounts**.
+  - **Hafte ka bhugtan:** har labour: kamai − advance = dena → "Pay" entry.
+  - TDD: core (weekly din / OT / amount / dena), rules, server e2e — pehle fail, phir code.
+- ⏳ Baaki Phase 2: Labour attendance (upar wala design), Store / Saman Register, Daily Work + Drive photos, Creditors
 
 ## Phase 1 — haal (24 Oct 2026) ✅
 - ✅ core formule + jaanch (GSTIN / mobile / IFSC) — 61 tests

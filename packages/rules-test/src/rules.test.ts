@@ -245,6 +245,81 @@ describe("attendance (Phase 2)", () => {
   });
 });
 
+describe("labour attendance (naam-wise, weekly)", () => {
+  function addLabour(db: Firestore, email: string, id: string, data: Record<string, unknown>, rev: number, action: string, opts: { withAudit?: boolean; reason?: string | null } = {}) {
+    const auditId = `lb${++auditSeq}`;
+    const batch = writeBatch(db);
+    const ref = doc(db, `projects/${PID}/labour/${id}`);
+    const base = { ...data, rev, lastAuditId: auditId, updatedBy: email };
+    if (action === "CREATE") batch.set(ref, { ...base, projectId: PID, createdBy: email, deleted: null });
+    else batch.update(ref, base);
+    if (opts.withAudit !== false) {
+      batch.set(doc(db, `projects/${PID}/auditLog/${auditId}`), {
+        entity: `labour/${id}`, action, rev, by: email, at: serverTimestamp(),
+        reason: opts.reason !== undefined ? opts.reason : action === "CREATE" ? null : "rate badla",
+      });
+    }
+    return batch.commit();
+  }
+  const ramu = { name: "Ramu", type: "KULI", ratePaise: 60000, group: "COMPANY" };
+
+  it("site user labour jod / rate badal sake (audit ke saath)", async () => {
+    const db = dbAs(SITE);
+    await assertSucceeds(addLabour(db, SITE, "L1", ramu, 1, "CREATE"));
+    await assertSucceeds(addLabour(db, SITE, "L1", { ratePaise: 65000 }, 2, "UPDATE"));
+  });
+
+  it("audit / reason ke bina nahi; dusre project ka user nahi", async () => {
+    await assertFails(addLabour(dbAs(SITE), SITE, "L1", ramu, 1, "CREATE", { withAudit: false }));
+    await addLabour(dbAs(SITE), SITE, "L1", ramu, 1, "CREATE");
+    await assertFails(addLabour(dbAs(SITE), SITE, "L1", { ratePaise: 1 }, 2, "UPDATE", { reason: "" }));
+    await assertFails(addLabour(dbAs(OTHER), OTHER, "L2", ramu, 1, "CREATE"));
+  });
+
+  it("labour hard delete nahi; soft-delete reason ke saath", async () => {
+    await addLabour(dbAs(SITE), SITE, "L1", ramu, 1, "CREATE");
+    await assertFails(deleteDoc(doc(dbAs(ADMIN), `projects/${PID}/labour/L1`)));
+    await assertSucceeds(addLabour(dbAs(SITE), SITE, "L1", { deleted: { reason: "chhod ke chala gaya" } }, 2, "DELETE", { reason: "chhod ke chala gaya" }));
+  });
+
+  it("labour haazri aur payment — baaki entries jaise (2-din window, audit)", async () => {
+    const db = dbAs(SITE);
+    const batch = writeBatch(db);
+    const base = { projectId: PID, createdBy: SITE, createdAt: serverTimestamp(), deleted: null, rev: 1, serverStatus: "PENDING" };
+    batch.set(doc(db, `projects/${PID}/labourAttendance/A1`), { ...base, lastAuditId: "lx1", businessDate: TODAY, labourId: "L1", group: "COMPANY", mark: "P", otHours: 2, ratePaise: 60000 });
+    batch.set(doc(db, `projects/${PID}/labourPassbook/B1`), { ...base, lastAuditId: "lx2", businessDate: TODAY, labourId: "L1", kind: "ADVANCE", amountPaise: 50000, mode: "CASH" });
+    batch.set(doc(db, `projects/${PID}/auditLog/lx1`), { entity: "labourAttendance/A1", action: "CREATE", rev: 1, by: SITE, at: serverTimestamp(), reason: null });
+    batch.set(doc(db, `projects/${PID}/auditLog/lx2`), { entity: "labourPassbook/B1", action: "CREATE", rev: 1, by: SITE, at: serverTimestamp(), reason: null });
+    await assertSucceeds(batch.commit());
+  });
+
+  it("labour khata / hafta (labourBalances, labourWeeks): member padhe, likhe koi nahi", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), `projects/${PID}/labourBalances/L1`), { balancePaise: 1 });
+      await setDoc(doc(ctx.firestore(), `projects/${PID}/labourWeeks/2026-10-19`), { labour: {} });
+    });
+    await assertSucceeds(getDoc(doc(dbAs(SITE), `projects/${PID}/labourBalances/L1`)));
+    await assertSucceeds(getDoc(doc(dbAs(SITE), `projects/${PID}/labourWeeks/2026-10-19`)));
+    await assertFails(setDoc(doc(dbAs(ADMIN), `projects/${PID}/labourBalances/L1`), { balancePaise: 0 }));
+    await assertFails(setDoc(doc(dbAs(SITE), `projects/${PID}/labourWeeks/2026-10-19`), { labour: {} }));
+  });
+});
+
+describe("company bank accounts (payment kis account se)", () => {
+  function addAccount(db: Firestore, email: string) {
+    const auditId = `ca${++auditSeq}`;
+    const batch = writeBatch(db);
+    batch.set(doc(db, "masters_companyAccounts/sbi"), { name: "SBI Current", bankName: "SBI", accountNo: "50200088991122", rev: 1, lastAuditId: auditId, createdBy: email, updatedBy: email, deleted: null });
+    batch.set(doc(db, `auditLog/${auditId}`), { entity: "masters_companyAccounts/sbi", action: "CREATE", rev: 1, by: email, at: serverTimestamp(), reason: null });
+    return batch.commit();
+  }
+  it("sirf Admin jode; site user padh sake", async () => {
+    await assertFails(addAccount(dbAs(SITE), SITE));
+    await assertSucceeds(addAccount(dbAs(ADMIN), ADMIN));
+    await assertSucceeds(getDoc(doc(dbAs(SITE), "masters_companyAccounts/sbi")));
+  });
+});
+
 describe("delete / Recycle Bin", () => {
   it("hard delete kisi ko nahi — Admin ko bhi nahi", async () => {
     await seedEntry("e1", TODAY);

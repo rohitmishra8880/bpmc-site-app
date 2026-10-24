@@ -9,9 +9,8 @@ import { softDeleteWrite, useDay, useDayEntries, useUnlock, writeEntries, type E
 import { useMaster, type MasterRow } from "../lib/masters";
 import { useProjects } from "../lib/projects";
 import { Dialog, errorText, PageHead, ReasonDialog, useToast } from "../lib/ui";
+import { LabourWeek, payData, PaymentFields, payStateValid, type PayState } from "./LabourWeek";
 
-/** Company ki apni labour — purane app jaisa alag row */
-const COMPANY: MasterRow = { id: "COMPANY", name: "Company labour" };
 const MARKS: [StaffMark, string, string][] = [
   ["P", "P", "ok"],
   ["HD", "HD", "warn"],
@@ -24,28 +23,41 @@ const PAY_KIND: [string, string][] = [
 ];
 
 export function Attendance() {
+  const [tab, setTab] = useState<"labour" | "staff">("labour");
+  return (
+    <>
+      <PageHead title="Attendance" sub="Labour attendance (weekly sheet) and company staff with their ledger" />
+      <div className="tabs" role="group" aria-label="Attendance">
+        <button className="tab" aria-pressed={tab === "labour"} onClick={() => setTab("labour")}>
+          👷 Labour attendance (weekly)
+        </button>
+        <button className="tab" aria-pressed={tab === "staff"} onClick={() => setTab("staff")}>
+          🧑‍💼 Staff (daily)
+        </button>
+      </div>
+      {tab === "labour" ? <LabourWeek /> : <StaffDay />}
+    </>
+  );
+}
+
+function StaffDay() {
   const profile = useProfile();
   const toast = useToast();
   const { current } = useProjects();
-  const contractors = useMaster("masters_contractors");
   const staff = useMaster("masters_staff");
   const [date, setDate] = useState(() => toBusinessDateIST(new Date()));
-  const { rows: musters } = useDayEntries(current?.id, "labourMuster", date);
   const { rows: marks } = useDayEntries(current?.id, "staffAttendance", date);
   const { rows: pays } = useDayEntries(current?.id, "staffPassbook", date);
   const day = useDay(current?.id, date);
   const unlock = useUnlock(current?.id, date);
   const balances = useStaffBalances(current?.id);
-  const [musterFor, setMusterFor] = useState<MasterRow | null>(null);
   const [khataFor, setKhataFor] = useState<MasterRow | null>(null);
-  const [remark, setRemark] = useState<{ col: "labourMuster"; e: Entry } | null>(null);
   const [markChange, setMarkChange] = useState<{ e: Entry; mark: StaffMark } | null>(null);
 
   const open = canEditDate(date, new Date(), unlock ? { expiresAt: unlock } : null) && can(profile, "entry.create");
-  const rowsFor = useMemo(() => new Map((musters ?? []).filter((m) => !m.deleted).map((m) => [m.contractorId as string, m])), [musters]);
   const markFor = useMemo(() => new Map((marks ?? []).filter((m) => !m.deleted).map((m) => [m.staffId as string, m])), [marks]);
-  const pending = [...(musters ?? []), ...(marks ?? []), ...(pays ?? [])].filter((r) => !r.deleted && r.serverStatus === "PENDING").length;
-  const labour = day?.labour as { totals: { mistri: number; kuli: number; reja: number; total: number }; byContractor: Record<string, { total: number }> } | undefined;
+  const pending = [...(marks ?? []), ...(pays ?? [])].filter((r) => !r.deleted && r.serverStatus === "PENDING").length;
+  const labour = day?.labour as { totals: { mistri: number; kuli: number; reja: number; total: number } } | undefined;
   const st = day?.staff as { present: number; halfDay: number; absent: number; marked: number } | undefined;
 
   if (!current) return <div className="card empty">Select a project first.</div>;
@@ -71,21 +83,10 @@ export function Attendance() {
       toast(errorText(err), true);
     }
   };
-  const removeMuster = async (e: Entry, reason: string) => {
-    try {
-      await writeEntries(current.id, profile.email, [softDeleteWrite("labourMuster", e, profile.email, reason)], reason);
-      toast("Deleted — moved to Recycle Bin");
-    } catch (err) {
-      toast(errorText(err), true);
-    }
-  };
-
-  const groups = [COMPANY, ...contractors];
 
   return (
     <>
-      <DateBar title="Staff KYC & Labour Muster" sub={`${current.name} — attendance, advances and wages`} date={date} onChange={setDate} pending={pending} unlockedTill={unlock} />
-      <PageHead title="Daily Attendance" sub="Contractor muster (Mistri / Kuli / Reja) and company staff with their ledger" />
+      <DateBar title="Staff attendance" sub={`${current.name} — company staff, advances and salary`} date={date} onChange={setDate} pending={pending} unlockedTill={unlock} />
       <div className="stats">
         <div className="card stat">
           <span className="lab">Staff present</span>
@@ -96,14 +97,9 @@ export function Attendance() {
           <span className="foot">{st ? `${st.present} P · ${st.halfDay} HD · ${st.absent} A` : "No staff attendance yet"}</span>
         </div>
         <div className="card stat">
-          <span className="lab">Labour total</span>
+          <span className="lab">Labour on site</span>
           <span className="num">{labour ? labour.totals.total : "—"}</span>
-          <span className="foot">{labour ? `Mistri ${labour.totals.mistri} · Kuli ${labour.totals.kuli} · Reja ${labour.totals.reja}` : "No muster yet"}</span>
-        </div>
-        <div className="card stat">
-          <span className="lab">Contractors on site</span>
-          <span className="num">{labour ? Object.keys(labour.byContractor).length : "—"}</span>
-          <span className="foot">Including company labour</span>
+          <span className="foot">{labour ? `Mistri ${labour.totals.mistri} · Kuli ${labour.totals.kuli} · Reja ${labour.totals.reja}` : "See the weekly labour sheet"}</span>
         </div>
         <div className="card stat">
           <span className="lab">Staff payments</span>
@@ -111,87 +107,6 @@ export function Attendance() {
           <span className="foot">Entries on this day</span>
         </div>
       </div>
-
-      <section className="card">
-        <div className="card-head">
-          <div>
-            <h2>Labour muster</h2>
-            <p className="small muted">One entry per contractor per day. Add contractors under Masters.</p>
-          </div>
-          {can(profile, "masters.edit") && (
-            <Link className="btn sm" to="/masters">
-              ＋ Contractor
-            </Link>
-          )}
-        </div>
-        <div className="tbl-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Contractor</th>
-                <th className="r">Mistri</th>
-                <th className="r">Kuli</th>
-                <th className="r">Reja</th>
-                <th className="r">Total</th>
-                <th>Work / zone</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {groups.map((g) => {
-                const m = rowsFor.get(g.id);
-                const srv = labour?.byContractor?.[g.id];
-                return (
-                  <tr key={g.id}>
-                    <td>
-                      <b>{g.name}</b>
-                    </td>
-                    <td className="r">{m ? m.mistri : "—"}</td>
-                    <td className="r">{m ? m.kuli : "—"}</td>
-                    <td className="r">{m ? m.reja : "—"}</td>
-                    <td className="r">
-                      <b>{srv ? srv.total : m ? "⏳" : "—"}</b>
-                    </td>
-                    <td className="wrap small">{[m?.work, m?.zone].filter(Boolean).join(" · ")}</td>
-                    <td>
-                      <div className="actions">
-                        {open && (
-                          <button className={`btn sm ${m ? "" : "primary"}`} onClick={() => setMusterFor(g)}>
-                            {m ? "✎ Edit" : "＋ Enter"}
-                          </button>
-                        )}
-                        {open && m && (
-                          <button className="btn sm danger" onClick={() => setRemark({ col: "labourMuster", e: m })} aria-label="Delete">
-                            🗑
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-            {labour && (
-              <tfoot>
-                <tr>
-                  <td>
-                    <b>Total</b>
-                  </td>
-                  <td className="r">{labour.totals.mistri}</td>
-                  <td className="r">{labour.totals.kuli}</td>
-                  <td className="r">{labour.totals.reja}</td>
-                  <td className="r">
-                    <b>{labour.totals.total}</b>
-                  </td>
-                  <td colSpan={2} className="small muted">
-                    Calculated by server
-                  </td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
-      </section>
 
       <section className="card">
         <div className="card-head">
@@ -266,19 +181,7 @@ export function Attendance() {
         <p className="note">Day rate = monthly salary ÷ 30. P = full day, HD = half day, A = nothing. Balance = earned + staff expenses − paid (negative = staff owes).</p>
       </section>
 
-      {musterFor && <MusterForm group={musterFor} date={date} row={rowsFor.get(musterFor.id) ?? null} onClose={() => setMusterFor(null)} />}
       {khataFor && <KhataDialog s={khataFor} date={date} open={open} balance={balances[khataFor.id]} onClose={() => setKhataFor(null)} />}
-      {remark && (
-        <ReasonDialog
-          title="Delete this muster entry?"
-          onCancel={() => setRemark(null)}
-          onConfirm={(r) => {
-            const x = remark;
-            setRemark(null);
-            void removeMuster(x.e, r);
-          }}
-        />
-      )}
       {markChange && (
         <ReasonDialog
           title={`Change attendance to ${markChange.mark}?`}
@@ -304,112 +207,16 @@ function useStaffBalances(pid: string | undefined) {
   return b;
 }
 
-function MusterForm({ group, date, row, onClose }: { group: MasterRow; date: string; row: Entry | null; onClose: () => void }) {
-  const profile = useProfile();
-  const toast = useToast();
-  const { current } = useProjects();
-  const [v, setV] = useState({
-    mistri: row ? String(row.mistri) : "",
-    kuli: row ? String(row.kuli) : "",
-    reja: row ? String(row.reja) : "",
-    work: (row?.work as string) ?? "",
-    zone: (row?.zone as string) ?? "",
-    remark: (row?.remark as string) ?? "",
-  });
-  const [reason, setReason] = useState("");
-  const [busy, setBusy] = useState(false);
-  const n = (s: string) => (s.trim() === "" ? 0 : Number(s));
-  const bad = (["mistri", "kuli", "reja"] as const).filter((k) => !Number.isInteger(n(v[k])) || n(v[k]) < 0);
-  const total = bad.length ? null : n(v.mistri) + n(v.kuli) + n(v.reja);
-  const valid = !bad.length && total !== null && total > 0 && (!row || reason.trim().length >= 3);
-
-  const save = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!valid || !current) return;
-    setBusy(true);
-    try {
-      await writeEntries(
-        current.id,
-        profile.email,
-        [
-          {
-            col: "labourMuster",
-            id: row?.id,
-            current: row,
-            action: row ? "UPDATE" : "CREATE",
-            data: { businessDate: date, contractorId: group.id, contractorName: group.name, mistri: n(v.mistri), kuli: n(v.kuli), reja: n(v.reja), work: v.work.trim() || null, zone: v.zone || null, remark: v.remark.trim() || null },
-          },
-        ],
-        row ? reason.trim() : null,
-      );
-      toast(navigator.onLine ? "Muster saved ✓ · server is calculating ⏳" : "Saved on this phone — will sync when online");
-      onClose();
-    } catch (err) {
-      toast(errorText(err), true);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Dialog title={`${group.name} — ${formatDate(date)}`} onClose={onClose}>
-      <form className="form" onSubmit={save}>
-        <div className="grid-form" style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}>
-          {(["mistri", "kuli", "reja"] as const).map((k) => (
-            <div className="field" key={k}>
-              <label htmlFor={`lm-${k}`}>{k[0]!.toUpperCase() + k.slice(1)}</label>
-              <input id={`lm-${k}`} className="input" inputMode="numeric" value={v[k]} onChange={(e) => setV({ ...v, [k]: e.target.value })} placeholder="0" style={{ fontSize: 24, fontWeight: 700, textAlign: "center" }} />
-              {bad.includes(k) && <span className="err">Whole number</span>}
-            </div>
-          ))}
-        </div>
-        <p className="small muted">Total (preview): {total ?? "—"}</p>
-        <div className="grid-form">
-          <div className="field">
-            <label htmlFor="lm-work">Work</label>
-            <input id="lm-work" className="input" value={v.work} onChange={(e) => setV({ ...v, work: e.target.value })} placeholder="e.g. shuttering, bar bending" />
-          </div>
-          <div className="field">
-            <label htmlFor="lm-zone">Zone</label>
-            <select id="lm-zone" className="input" value={v.zone} onChange={(e) => setV({ ...v, zone: e.target.value })}>
-              <option value="">—</option>
-              {(current?.zones ?? []).map((z) => (
-                <option key={z}>{z}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-        <div className="field">
-          <label htmlFor="lm-rm">Remark</label>
-          <input id="lm-rm" className="input" value={v.remark} onChange={(e) => setV({ ...v, remark: e.target.value })} />
-        </div>
-        {row && (
-          <div className="field">
-            <label htmlFor="lm-why">Reason for change *</label>
-            <input id="lm-why" className="input" value={reason} onChange={(e) => setReason(e.target.value)} />
-          </div>
-        )}
-        <div className="actions">
-          <button type="button" className="btn" onClick={onClose}>
-            Cancel
-          </button>
-          <button className="btn primary" disabled={!valid || busy}>
-            Save
-          </button>
-        </div>
-      </form>
-    </Dialog>
-  );
-}
-
 function KhataDialog({ s, date, open, balance, onClose }: { s: MasterRow; date: string; open: boolean; balance: DocumentData | undefined; onClose: () => void }) {
   const profile = useProfile();
   const toast = useToast();
   const { current } = useProjects();
+  const accounts = useMaster("masters_companyAccounts");
   const [rows, setRows] = useState<Entry[]>([]);
   const [kind, setKind] = useState("ADVANCE");
   const [amt, setAmt] = useState("");
   const [remark, setRemark] = useState("");
+  const [pay, setPay] = useState<PayState>({ mode: "CASH", accountId: "", refNo: "" });
   const [removing, setRemoving] = useState<Entry | null>(null);
 
   useEffect(() => {
@@ -420,13 +227,20 @@ function KhataDialog({ s, date, open, balance, onClose }: { s: MasterRow; date: 
   }, [current, s.id]);
 
   const a = Number(amt);
-  const valid = amt !== "" && Number.isFinite(a) && a > 0;
+  // Staff ne apna kharcha kiya (EXPENSE) — company account se paisa nahi gaya, isliye mode nahi
+  const needPay = kind !== "EXPENSE";
+  const valid = amt !== "" && Number.isFinite(a) && a > 0 && (!needPay || payStateValid(pay));
 
   const add = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!valid || !current) return;
     try {
-      await writeEntries(current.id, profile.email, [{ col: "staffPassbook", current: null, action: "CREATE", data: { businessDate: date, staffId: s.id, staffName: s.name, kind, amountPaise: toPaise(a), remark: remark.trim() || null } }], null);
+      await writeEntries(
+        current.id,
+        profile.email,
+        [{ col: "staffPassbook", current: null, action: "CREATE", data: { businessDate: date, staffId: s.id, staffName: s.name, kind, amountPaise: toPaise(a), remark: remark.trim() || null, ...(needPay ? payData(pay, accounts) : { mode: null, accountId: null, accountName: null, refNo: null }) } }],
+        null,
+      );
       setAmt("");
       setRemark("");
       toast("Added to ledger ✓");
@@ -471,28 +285,33 @@ function KhataDialog({ s, date, open, balance, onClose }: { s: MasterRow; date: 
           <p className="small muted">No ledger calculated yet — the server prepares it within 5 minutes of the first attendance or payment.</p>
         )}
         {open && (
-          <form onSubmit={add} className="grid-form" style={{ alignItems: "end" }}>
-            <div className="field">
-              <label htmlFor="k-kind">Type</label>
-              <select id="k-kind" className="input" value={kind} onChange={(e) => setKind(e.target.value)}>
-                {PAY_KIND.map(([k, l]) => (
-                  <option key={k} value={k}>
-                    {l}
-                  </option>
-                ))}
-              </select>
+          <form onSubmit={add} className="form" style={{ padding: 0 }}>
+            <div className="grid-form">
+              <div className="field">
+                <label htmlFor="k-kind">Type</label>
+                <select id="k-kind" className="input" value={kind} onChange={(e) => setKind(e.target.value)}>
+                  {PAY_KIND.map(([k, l]) => (
+                    <option key={k} value={k}>
+                      {l}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label htmlFor="k-amt">Amount (₹)</label>
+                <input id="k-amt" className="input" inputMode="decimal" value={amt} onChange={(e) => setAmt(e.target.value)} />
+              </div>
+              <div className="field" style={{ gridColumn: "1 / -1" }}>
+                <label htmlFor="k-rm">Remark</label>
+                <input id="k-rm" className="input" value={remark} onChange={(e) => setRemark(e.target.value)} />
+              </div>
             </div>
-            <div className="field">
-              <label htmlFor="k-amt">Amount (₹)</label>
-              <input id="k-amt" className="input" inputMode="decimal" value={amt} onChange={(e) => setAmt(e.target.value)} />
+            {needPay && <PaymentFields v={pay} setV={setPay} accounts={accounts} />}
+            <div className="actions">
+              <button className="btn primary" disabled={!valid}>
+                ＋ Add for {formatDate(date)}
+              </button>
             </div>
-            <div className="field">
-              <label htmlFor="k-rm">Remark</label>
-              <input id="k-rm" className="input" value={remark} onChange={(e) => setRemark(e.target.value)} placeholder="e.g. UPI, cash" />
-            </div>
-            <button className="btn primary" disabled={!valid}>
-              ＋ Add for {formatDate(date)}
-            </button>
           </form>
         )}
         <div className="tbl-wrap">
@@ -502,7 +321,8 @@ function KhataDialog({ s, date, open, balance, onClose }: { s: MasterRow; date: 
                 <th>Date</th>
                 <th>Type</th>
                 <th className="r">Amount</th>
-                <th>Remark</th>
+                <th>Mode</th>
+                <th>Ref / remark</th>
                 <th />
               </tr>
             </thead>
@@ -512,7 +332,11 @@ function KhataDialog({ s, date, open, balance, onClose }: { s: MasterRow; date: 
                   <td>{formatDate(r.businessDate)}</td>
                   <td>{PAY_KIND.find((p) => p[0] === r.kind)?.[1] ?? r.kind}</td>
                   <td className="r">{formatINR(r.amountPaise)}</td>
-                  <td className="wrap small">{r.remark ?? ""}</td>
+                  <td className="small">
+                    {r.mode ?? "—"}
+                    {r.accountName ? ` · ${r.accountName}` : ""}
+                  </td>
+                  <td className="wrap small">{[r.refNo, r.remark].filter(Boolean).join(" · ")}</td>
                   <td>
                     {!r.deleted && canEditDate(r.businessDate, new Date()) && can(profile, "entry.delete") && (
                       <button className="btn sm danger" onClick={() => setRemoving(r)} aria-label="Delete">

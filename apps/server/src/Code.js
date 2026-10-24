@@ -138,7 +138,9 @@ function runHisab() {
       var pMuster = query_(parent, 'labourMuster', 'serverStatus', ENTRY_STATUS_PENDING);
       var pStaff = query_(parent, 'staffAttendance', 'serverStatus', ENTRY_STATUS_PENDING);
       var pPass = query_(parent, 'staffPassbook', 'serverStatus', ENTRY_STATUS_PENDING);
-      var all = pStock.concat(pLogs, pDeds, pMuster, pStaff, pPass);
+      var pLabAtt = query_(parent, 'labourAttendance', 'serverStatus', ENTRY_STATUS_PENDING);
+      var pLabPass = query_(parent, 'labourPassbook', 'serverStatus', ENTRY_STATUS_PENDING);
+      var all = pStock.concat(pLogs, pDeds, pMuster, pStaff, pPass, pLabAtt, pLabPass);
       if (!all.length) return;
       var out = {};
       if (pStock.length) {
@@ -146,7 +148,8 @@ function runHisab() {
         out.udhaar = hisabUdhaar_(parent, p.id, pStock);
       }
       if (pLogs.length || pDeds.length) out.machines = hisabMachines_(parent, pLogs, pDeds, ctx);
-      if (pMuster.length || pStaff.length || pPass.length) out.attendance = hisabAttendance_(parent, pMuster, pStaff, pPass, ctx);
+      if (pMuster.length || pStaff.length || pPass.length || pLabAtt.length) out.attendance = hisabAttendance_(parent, pMuster.concat(pLabAtt), pStaff, pPass, ctx);
+      if (pLabAtt.length || pLabPass.length) out.labour = hisabLabour_(parent, pLabAtt, pLabPass, ctx);
       out.notMarked = markDone_(all);
       log.projects[p.id] = out;
     });
@@ -369,13 +372,22 @@ function hisabAttendance_(parent, pMuster, pStaff, pPass, ctx) {
   var writes = [];
   var musterDates = {};
   pMuster.forEach(function (d) { if (d.data.businessDate) musterDates[d.data.businessDate] = 1; });
+  var labourMaster = null;
   Object.keys(musterDates).forEach(function (date) {
     var latest = latestBy_(query_(parent, 'labourMuster', 'businessDate', date), 'contractorId');
-    var entries = Object.keys(latest).map(function (k) {
+    var counts = Object.keys(latest).map(function (k) {
       var m = latest[k].data;
       return { contractorId: m.contractorId, mistri: Number(m.mistri) || 0, kuli: Number(m.kuli) || 0, reja: Number(m.reja) || 0 };
     });
-    var labour = BPMCCore.labourDay(entries);
+    // Naam-wise haazri (labourAttendance) — har labour ki us din ki sabse nayi entry
+    var namedDocs = latestBy_(query_(parent, 'labourAttendance', 'businessDate', date), 'labourId');
+    if (Object.keys(namedDocs).length && !labourMaster) labourMaster = labourMap_(parent);
+    var named = Object.keys(namedDocs).map(function (lid) {
+      var a = namedDocs[lid].data;
+      var m = labourMaster[lid] || {};
+      return { group: m.group || a.group || 'COMPANY', type: m.type || a.type || 'KULI', mark: a.mark };
+    });
+    var labour = BPMCCore.labourDay(BPMCCore.combineLabour(counts, named));
     writes.push({
       update: { name: fullName_(parent + '/days/' + date), fields: { labour: enc_(labour), date: enc_(date) } },
       updateMask: { fieldPaths: ['labour', 'date'] },
@@ -428,6 +440,80 @@ function hisabAttendance_(parent, pMuster, pStaff, pPass, ctx) {
   return { musterDays: Object.keys(musterDates).length, staffDays: Object.keys(staffDates).length, staff: Object.keys(staffIds).length };
 }
 
+/** Project ki labour list: id → { name, type, ratePaise, group } */
+function labourMap_(parent) {
+  var out = {};
+  query_(parent, 'labour').forEach(function (d) { out[d.id] = d.data; });
+  return out;
+}
+
+/** Ek labour ki entries: har din ki sabse nayi (hataayi chhod ke) → core ke LabourMark */
+function labourMarks_(docs) {
+  var perDay = {};
+  docs.forEach(function (d) {
+    if (d.data.deleted) return;
+    var cur = perDay[d.data.businessDate];
+    if (!cur || d.updateTime > cur.updateTime) perDay[d.data.businessDate] = d;
+  });
+  return Object.keys(perDay).map(function (k) {
+    var a = perDay[k].data;
+    return { businessDate: k, mark: a.mark, otHours: Number(a.otHours) || 0, ratePaise: a.ratePaise != null ? a.ratePaise : null };
+  });
+}
+
+/**
+ * Naam-wise labour: hafte ka hisab (labourWeeks/{Monday}) aur har labour ka khata (labourBalances/{labourId}).
+ * Kamai = din × rate + OT ghante × rate ÷ 8; khata = kamai − advance / bhugtan.
+ */
+function hisabLabour_(parent, pLabAtt, pLabPass, ctx) {
+  loadSettings_(ctx);
+  var master = labourMap_(parent);
+  var shift = ctx.rental.shiftHours;
+  var writes = [];
+
+  var weeks = {};
+  pLabAtt.forEach(function (d) { if (d.data.businessDate) weeks[BPMCCore.weekStart(d.data.businessDate)] = 1; });
+  Object.keys(weeks).forEach(function (ws) {
+    var byLabour = {};
+    rangeQuery_(parent, 'labourAttendance', 'businessDate', ws, BPMCCore.addDays(ws, 6)).forEach(function (d) {
+      (byLabour[d.data.labourId] = byLabour[d.data.labourId] || []).push(d);
+    });
+    var labour = {};
+    var total = 0;
+    Object.keys(byLabour).forEach(function (lid) {
+      var e = BPMCCore.labourEarning(labourMarks_(byLabour[lid]), (master[lid] || {}).ratePaise || 0, shift);
+      labour[lid] = e;
+      total += e.amountPaise;
+    });
+    writes.push({
+      update: { name: fullName_(parent + '/labourWeeks/' + ws), fields: encFields_({ weekStart: ws, labour: labour, totalPaise: total }) },
+      updateTransforms: [{ fieldPath: 'computedAt', setToServerValue: 'REQUEST_TIME' }],
+    });
+  });
+
+  var ids = {};
+  pLabAtt.concat(pLabPass).forEach(function (d) { if (d.data.labourId) ids[d.data.labourId] = 1; });
+  Object.keys(ids).forEach(function (lid) {
+    var m = master[lid] || {};
+    var k = BPMCCore.labourKhata({
+      ratePaise: m.ratePaise || 0,
+      marks: labourMarks_(query_(parent, 'labourAttendance', 'labourId', lid)),
+      payments: query_(parent, 'labourPassbook', 'labourId', lid).map(function (d) {
+        return { kind: d.data.kind, amountPaise: d.data.amountPaise || 0, deleted: !!d.data.deleted };
+      }),
+      shiftHours: shift,
+    });
+    k.name = m.name || lid;
+    k.group = m.group || null;
+    writes.push({
+      update: { name: fullName_(parent + '/labourBalances/' + lid), fields: encFields_(k) },
+      updateTransforms: [{ fieldPath: 'computedAt', setToServerValue: 'REQUEST_TIME' }],
+    });
+  });
+  if (writes.length) commit_(writes);
+  return { weeks: Object.keys(weeks).length, labour: Object.keys(ids).length };
+}
+
 /** Har key (thekedar / staff) ki sabse nayi, na-hataayi entry */
 function latestBy_(docs, key) {
   var out = {};
@@ -466,9 +552,10 @@ function installTriggers() {
 
 var OBSIDIAN_ROOT = 'AI obsidian';
 var PROJECT_COLLECTIONS = ['stockMoves', 'machineLogs', 'machineDeductions', 'labourMuster', 'staffAttendance', 'staffPassbook',
-  'workEntries', 'storeMoves', 'ledger', 'photos', 'auditLog', 'unlocks', 'days', 'machineBills'];
+  'workEntries', 'storeMoves', 'ledger', 'photos', 'auditLog', 'unlocks', 'days', 'machineBills',
+  'labour', 'labourAttendance', 'labourPassbook', 'labourBalances', 'labourWeeks', 'staffBalances'];
 var GLOBAL_COLLECTIONS = ['users', 'roles', 'settings', 'projects', 'masters_materials', 'masters_machines', 'masters_contractors',
-  'masters_parties', 'masters_storeItems', 'masters_staff', 'auditLog'];
+  'masters_parties', 'masters_storeItems', 'masters_staff', 'masters_companyAccounts', 'auditLog'];
 
 function obsidianRoot_() {
   var it = DriveApp.getRootFolder().getFoldersByName(OBSIDIAN_ROOT);
@@ -612,7 +699,7 @@ function bootstrapPhase1() {
 // auditLog aur days/ ko chhuta nahi (days server dobara banata hai).
 
 var RESTORE_COLLECTIONS = ['stockMoves', 'machineLogs', 'machineDeductions', 'labourMuster', 'staffAttendance', 'staffPassbook',
-  'workEntries', 'storeMoves', 'ledger', 'photos'];
+  'workEntries', 'storeMoves', 'ledger', 'photos', 'labourAttendance', 'labourPassbook'];
 
 function restoreInput_() {
   var props = PropertiesService.getScriptProperties();

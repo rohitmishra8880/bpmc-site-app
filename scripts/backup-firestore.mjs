@@ -13,9 +13,10 @@ if (!sa.client_email || !sa.private_key) throw new Error("GCP_SA_KEY secret set 
 if (pass.length < 12) throw new Error("BACKUP_PASSPHRASE kam se kam 12 akshar ka ho");
 
 const GLOBAL = ["users", "roles", "settings", "projects", "masters_materials", "masters_machines", "masters_contractors",
-  "masters_parties", "masters_storeItems", "masters_staff", "auditLog", "backupRuns", "migrations"];
+  "masters_parties", "masters_storeItems", "masters_staff", "masters_companyAccounts", "auditLog", "backupRuns", "migrations"];
 const PER_PROJECT = ["stockMoves", "machineLogs", "machineDeductions", "labourMuster", "staffAttendance", "staffPassbook",
-  "workEntries", "storeMoves", "ledger", "photos", "auditLog", "unlocks", "days", "machineBills"];
+  "workEntries", "storeMoves", "ledger", "photos", "auditLog", "unlocks", "days", "machineBills",
+  "labour", "labourAttendance", "labourPassbook", "labourBalances", "labourWeeks", "staffBalances"];
 
 const b64url = (b) => Buffer.from(b).toString("base64url");
 

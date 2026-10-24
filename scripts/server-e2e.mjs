@@ -79,6 +79,18 @@ put("projects/KSK/labourMuster/LM4", P({ businessDate: today, contractorId: "hem
 put("projects/KSK/staffAttendance/SA1", P({ businessDate: today, staffId: "anil", mark: "P" }));
 put("projects/KSK/staffPassbook/SP1", P({ businessDate: today, staffId: "anil", kind: "ADVANCE", amountPaise: 200000 }));
 
+// Labour attendance — naam-wise, hafta 19–25 Oct 2026 (Mon–Sun)
+put("projects/KSK/labour/R1", { name: "Ramu", type: "KULI", ratePaise: 60000, group: "COMPANY", deleted: null });
+put("projects/KSK/labour/R2", { name: "Shyam", type: "MISTRI", ratePaise: 90000, group: "suraj", deleted: null });
+put("projects/KSK/labourAttendance/W1", P({ businessDate: "2026-10-19", labourId: "R1", group: "COMPANY", mark: "P", otHours: 2, ratePaise: 60000 }));
+put("projects/KSK/labourAttendance/W2", P({ businessDate: "2026-10-20", labourId: "R1", group: "COMPANY", mark: "P", otHours: 0, ratePaise: 60000 }));
+put("projects/KSK/labourAttendance/W3", P({ businessDate: "2026-10-21", labourId: "R1", group: "COMPANY", mark: "HD", otHours: 0, ratePaise: 60000 }));
+put("projects/KSK/labourAttendance/W4", P({ businessDate: "2026-10-22", labourId: "R1", group: "COMPANY", mark: "A", otHours: 0, ratePaise: 60000 }));
+put("projects/KSK/labourAttendance/W5", P({ businessDate: "2026-10-19", labourId: "R2", group: "suraj", mark: "P", otHours: 0, ratePaise: 90000 }));
+put("projects/KSK/labourMuster/C1", P({ businessDate: "2026-10-19", contractorId: "suraj", mistri: 9, kuli: 9, reja: 9 }));
+put("projects/KSK/labourMuster/C2", P({ businessDate: "2026-10-19", contractorId: "hemlal", mistri: 2, kuli: 8, reja: 0 }));
+put("projects/KSK/labourPassbook/LP1", P({ businessDate: "2026-10-20", labourId: "R1", kind: "ADVANCE", amountPaise: 50000, mode: "CASH" }));
+
 // ---- chalao ----
 S.runHisab();
 
@@ -112,6 +124,15 @@ expect("Labour: Suraj 8", day.labour?.byContractor?.suraj?.total, 8);
 expect("Staff aaj: 1 present", day.staff, { present: 1, halfDay: 0, absent: 0, marked: 1 });
 const kh = get("projects/KSK/staffBalances/anil")?.data;
 expect("Anil khata: ₹933.33 kamai − ₹2,000 advance = −₹1,066.67", [kh?.earnedPaise, kh?.paidPaise, kh?.balancePaise], [93333, 200000, -106667]);
+const wk = get("projects/KSK/labourWeeks/2026-10-19")?.data;
+expect("Ramu hafta: 2.5 din × ₹600 + 2 ghante OT (₹150) = ₹1,650", wk?.labour?.R1, { days: 2.5, otHours: 2, wagesPaise: 150000, otPaise: 15000, amountPaise: 165000 });
+expect("Shyam (Suraj ka) hafta: 1 din × ₹900", wk?.labour?.R2?.amountPaise, 90000);
+expect("Hafte ka kul ₹2,550", wk?.totalPaise, 255000);
+const rb = get("projects/KSK/labourBalances/R1")?.data;
+expect("Ramu khata: ₹1,650 − ₹500 advance = ₹1,150 dena", [rb?.earnedPaise, rb?.paidPaise, rb?.balancePaise], [165000, 50000, 115000]);
+expect("19 Oct gin-ti: naam-wise (Company 1 Kuli, Suraj 1 Mistri) + Hemlal gin-ti 2/8 = 3/9/0 (Suraj ki 9/9/9 double nahi)", get("projects/KSK/days/2026-10-19")?.data?.labour?.totals, { mistri: 3, kuli: 9, reja: 0, total: 12 });
+expect("22 Oct: Ramu Absent → 0", get("projects/KSK/days/2026-10-22")?.data?.labour?.totals?.total, 0);
+expect("Labour entries DONE", ["labourAttendance/W1", "labourPassbook/LP1"].map((p) => get(`projects/KSK/${p}`).data.serverStatus), ["DONE", "DONE"]);
 expect("Attendance entries DONE", ["labourMuster/LM2", "staffAttendance/SA1", "staffPassbook/SP1"].map((p) => get(`projects/KSK/${p}`).data.serverStatus), ["DONE", "DONE", "DONE"]);
 
 console.log(fails ? `\n${fails} jaanch FAIL` : "\nSab server jaanch pass");

@@ -13,3 +13,4 @@ export * from "./validate";
 export * from "./migrate";
 export * from "./machine";
 export * from "./attendance";
+export * from "./labour";

@@ -107,6 +107,24 @@ service cloud.firestore {
         && a.by == email();
     }
 
+    // Company bank accounts (payment "kis account se") — sirf Admin likhe, sab active user padhein
+    match /masters_companyAccounts/{id} {
+      allow read: if isActiveUser();
+      allow create: if isAdmin()
+        && request.resource.data.createdBy == email()
+        && request.resource.data.deleted == null
+        && request.resource.data.rev == 1
+        && globalAuditOk('masters_companyAccounts', id);
+      allow update: if isAdmin()
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.updatedBy == email()
+        && request.resource.data.rev == resource.data.rev + 1
+        && globalAuditOk('masters_companyAccounts', id)
+        && (request.resource.data.deleted == null
+              || (request.resource.data.deleted.reason is string && request.resource.data.deleted.reason.size() >= 3));
+      allow delete: if false;
+    }
+
     // Masters: masters_materials, masters_machines, masters_contractors, masters_parties, masters_storeItems, masters_staff
     match /{col}/{id} {
       function isMaster() {
@@ -139,7 +157,8 @@ service cloud.firestore {
       match /{col}/{id} {
         function isEntryCol() {
           return col in ['stockMoves', 'machineLogs', 'machineDeductions', 'labourMuster', 'staffAttendance',
-                         'staffPassbook', 'workEntries', 'storeMoves', 'ledger', 'photos'];
+                         'staffPassbook', 'workEntries', 'storeMoves', 'ledger', 'photos',
+                         'labourAttendance', 'labourPassbook'];
         }
         function nd() {
           return request.resource.data;
@@ -210,6 +229,41 @@ service cloud.firestore {
         allow write: if false;
       }
       match /machineBills/{id} {
+        allow read: if member(pid);
+        allow write: if false;
+      }
+      // Project ki labour list (naam, type, rate) — master jaisa: tarikh ka lock nahi, par har badlav audit ke saath
+      match /labour/{id} {
+        function nd() {
+          return request.resource.data;
+        }
+        function labourAudit(action) {
+          let a = getAfter(/databases/$(database)/documents/projects/$(pid)/auditLog/$(nd().lastAuditId)).data;
+          return existsAfter(/databases/$(database)/documents/projects/$(pid)/auditLog/$(nd().lastAuditId))
+            && a.entity == 'labour/' + id && a.rev == nd().rev && a.by == email() && a.action == action;
+        }
+        allow read: if member(pid);
+        allow create: if member(pid) && can('masters.edit')
+          && nd().projectId == pid && nd().createdBy == email() && nd().deleted == null && nd().rev == 1
+          && labourAudit('CREATE');
+        allow update: if member(pid) && can('masters.edit')
+          && nd().projectId == resource.data.projectId
+          && nd().createdBy == resource.data.createdBy
+          && nd().updatedBy == email()
+          && nd().rev == resource.data.rev + 1
+          && (
+            (resource.data.deleted == null && nd().deleted == null && labourAudit('UPDATE'))
+            || (resource.data.deleted == null && nd().deleted != null && nd().deleted.reason is string && nd().deleted.reason.size() >= 3 && labourAudit('DELETE'))
+            || (resource.data.deleted != null && nd().deleted == null && can('recycle.restore') && labourAudit('RESTORE'))
+          );
+        allow delete: if false;
+      }
+      // Labour ka khata aur hafte ka hisab — server
+      match /labourBalances/{id} {
+        allow read: if member(pid);
+        allow write: if false;
+      }
+      match /labourWeeks/{week} {
         allow read: if member(pid);
         allow write: if false;
       }

@@ -18,6 +18,8 @@ const ENTRY_COLS: [string, string][] = [
   ["storeMoves", "Store register"],
   ["ledger", "Party ledger"],
   ["photos", "Photo"],
+  ["labourAttendance", "Labour attendance"],
+  ["labourPassbook", "Labour payment"],
 ];
 const MASTER_COLS: [string, string][] = [
   ["masters_materials", "Material"],

@@ -21,7 +21,7 @@ interface Field {
 
 const UNITS: [string, string][] = ["Ltr", "Kg", "MT", "Nos", "Mtr", "Bags", "cu.m", "Sq M", "Set"].map((u) => [u, u]);
 
-const MASTERS: { col: string; label: string; one: string; fields: Field[] }[] = [
+const MASTERS: { col: string; label: string; one: string; fields: Field[]; adminOnly?: boolean }[] = [
   {
     col: "masters_materials",
     label: "Material (incl. Oil)",
@@ -61,6 +61,7 @@ const MASTERS: { col: string; label: string; one: string; fields: Field[] }[] = 
       { key: "name", label: "Name", type: "text", required: true, show: true },
       { key: "mobile", label: "Mobile", type: "mobile", show: true },
       { key: "work", label: "Work type", type: "text", show: true, hint: "e.g. shuttering, bar bending" },
+      { key: "labourPaidBy", label: "Who pays this contractor's labour", type: "select", required: true, show: true, options: [["CONTRACTOR", "Contractor pays (we only record)"], ["US", "We pay the labour"]] },
       { key: "accountName", label: "Account holder name", type: "text" },
       { key: "bankName", label: "Bank name", type: "text", hint: "e.g. State Bank of India" },
       { key: "accountNo", label: "Account no.", type: "account", show: true },
@@ -110,6 +111,18 @@ const MASTERS: { col: string; label: string; one: string; fields: Field[] }[] = 
       { key: "ifsc", label: "IFSC", type: "ifsc" },
     ],
   },
+  {
+    col: "masters_companyAccounts",
+    label: "Company bank accounts",
+    one: "company account",
+    adminOnly: true,
+    fields: [
+      { key: "name", label: "Account label", type: "text", required: true, show: true, hint: "e.g. SBI Current — Keshkal" },
+      { key: "bankName", label: "Bank name", type: "text", required: true, show: true },
+      { key: "accountNo", label: "Account no.", type: "account", required: true, show: true },
+      { key: "ifsc", label: "IFSC", type: "ifsc", show: true },
+    ],
+  },
 ];
 
 type Row = DocumentData & { id: string };
@@ -134,7 +147,7 @@ export function Masters() {
   const [showDeleted, setShowDeleted] = useState(false);
   const [editing, setEditing] = useState<Row | "new" | null>(null);
   const [removing, setRemoving] = useState<Row | null>(null);
-  const editable = can(profile, "masters.edit");
+  const editable = m.adminOnly ? profile.isAdmin : can(profile, "masters.edit");
 
   useEffect(() => {
     setRows([]);
