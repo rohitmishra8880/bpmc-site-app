@@ -10,8 +10,8 @@ import { Dialog, errorText, PageHead, useToast } from "../lib/ui";
 type Row = UserDoc & { id: string; rev?: number };
 
 const ROLE_LABEL: Record<string, string> = {
-  admin: "Admin (poori access)",
-  site_user: "Site User (entry, edit, report)",
+  admin: "Admin (full access)",
+  site_user: "Site User (entry, edit, reports)",
 };
 
 export function Users() {
@@ -31,25 +31,25 @@ export function Users() {
     };
   }, [toast]);
 
-  if (!profile.isAdmin) return <div className="card empty">Yeh page sirf Admin ke liye hai.</div>;
+  if (!profile.isAdmin) return <div className="card empty">This page is for the Admin only.</div>;
   const pname = (id: string) => projects.find((p) => p.id === id)?.name ?? id;
 
   return (
     <>
-      <PageHead title="Users & Roles" sub="Kaun login kar sakta hai, kya kar sakta hai, kaunsa project dikhe — sirf Admin">
+      <PageHead title="Users & Roles" sub="Who can sign in, what they can do, which projects they see — Admin only">
         <button className="btn primary" onClick={() => setEditing("new")}>
-          ＋ User jodo (email)
+          ＋ Add user (email)
         </button>
       </PageHead>
       <section className="card tbl-wrap">
         <table>
           <thead>
             <tr>
-              <th>Naam</th>
+              <th>Name</th>
               <th>Email</th>
               <th>Role</th>
               <th>Project</th>
-              <th>Haalat</th>
+              <th>Status</th>
               <th />
             </tr>
           </thead>
@@ -61,12 +61,12 @@ export function Users() {
                 </td>
                 <td>{r.id}</td>
                 <td>{r.role === "admin" ? <span className="pill info">Admin</span> : (ROLE_LABEL[r.role] ?? r.role)}</td>
-                <td className="wrap">{r.role === "admin" ? "Sab" : r.projectIds.map(pname).join(", ") || "—"}</td>
-                <td>{r.active ? <span className="pill ok">Chalu</span> : <span className="pill neutral">Band</span>}</td>
+                <td className="wrap">{r.role === "admin" ? "All" : r.projectIds.map(pname).join(", ") || "—"}</td>
+                <td>{r.active ? <span className="pill ok">Active</span> : <span className="pill neutral">Disabled</span>}</td>
                 <td>
                   {r.id !== profile.email && (
                     <button className="btn sm" onClick={() => setEditing(r)}>
-                      ✎ Badlo
+                      ✎ Edit
                     </button>
                   )}
                 </td>
@@ -74,7 +74,7 @@ export function Users() {
             ))}
           </tbody>
         </table>
-        <p className="note">Har user apne email / Google se login karta hai — OTP / link usi ke email par jaata hai. Apna khud ka Admin record yahan se nahi badal sakte (galti se lock na ho).</p>
+        <p className="note">Each user signs in with their own email / Google account — links go to their own email. You cannot edit your own Admin record here (to avoid locking yourself out).</p>
       </section>
       {editing && <UserForm row={editing === "new" ? null : editing} roles={roles} onClose={() => setEditing(null)} />}
     </>
@@ -109,7 +109,7 @@ function UserForm({ row, roles, onClose }: { row: Row | null; roles: string[]; o
         row ? "UPDATE" : "CREATE",
         row ? reason.trim() : null,
       );
-      toast(row ? "User badal diya ✓" : "User jud gaya ✓ — ab woh login kar sakta hai");
+      toast(row ? "User updated ✓" : "User added ✓ — they can sign in now");
       onClose();
     } catch (err) {
       toast(errorText(err), true);
@@ -119,7 +119,7 @@ function UserForm({ row, roles, onClose }: { row: Row | null; roles: string[]; o
   };
 
   return (
-    <Dialog title={row ? "User badlo" : "Naya user"} onClose={onClose}>
+    <Dialog title={row ? "Edit user" : "New user"} onClose={onClose}>
       <form className="form" onSubmit={save}>
         <div className="grid-form">
           <div className="field">
@@ -127,7 +127,7 @@ function UserForm({ row, roles, onClose }: { row: Row | null; roles: string[]; o
             <input id="u-email" type="email" className="input" value={email} onChange={(e) => setEmail(e.target.value)} disabled={!!row} />
           </div>
           <div className="field">
-            <label htmlFor="u-name">Naam *</label>
+            <label htmlFor="u-name">Name *</label>
             <input id="u-name" className="input" value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div className="field">
@@ -141,15 +141,15 @@ function UserForm({ row, roles, onClose }: { row: Row | null; roles: string[]; o
             </select>
           </div>
           <div className="field">
-            <span style={{ fontWeight: 600, fontSize: 14 }}>Haalat</span>
+            <span style={{ fontWeight: 600, fontSize: 14 }}>Status</span>
             <label className="check">
-              <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} /> Chalu (login kar sake)
+              <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} /> Active (can sign in)
             </label>
           </div>
         </div>
         {role !== "admin" && (
           <div className="field">
-            <span style={{ fontWeight: 600, fontSize: 14 }}>Kaunse project dikhein *</span>
+            <span style={{ fontWeight: 600, fontSize: 14 }}>Projects this user can see *</span>
             <div className="checks">
               {projects.map((p) => (
                 <label key={p.id} className="check">
@@ -162,16 +162,16 @@ function UserForm({ row, roles, onClose }: { row: Row | null; roles: string[]; o
         )}
         {row && (
           <div className="field">
-            <label htmlFor="u-reason">Badalne ka kaaran *</label>
+            <label htmlFor="u-reason">Reason for change *</label>
             <input id="u-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} />
           </div>
         )}
         <div className="actions">
           <button type="button" className="btn" onClick={onClose}>
-            Radd
+            Cancel
           </button>
           <button className="btn primary" disabled={!valid || busy}>
-            Save karo
+            Save
           </button>
         </div>
       </form>

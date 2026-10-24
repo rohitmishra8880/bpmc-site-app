@@ -12,19 +12,19 @@ const ENTRY_COLS: [string, string][] = [
   ["machineLogs", "Machine log"],
   ["machineDeductions", "Machine advance"],
   ["labourMuster", "Labour muster"],
-  ["staffAttendance", "Staff haazri"],
-  ["staffPassbook", "Staff khata"],
+  ["staffAttendance", "Staff attendance"],
+  ["staffPassbook", "Staff ledger"],
   ["workEntries", "Daily Work"],
-  ["storeMoves", "Saman register"],
-  ["ledger", "Party khata"],
+  ["storeMoves", "Store register"],
+  ["ledger", "Party ledger"],
   ["photos", "Photo"],
 ];
 const MASTER_COLS: [string, string][] = [
-  ["masters_materials", "Maal"],
+  ["masters_materials", "Material"],
   ["masters_machines", "Machine"],
-  ["masters_contractors", "Thekedar"],
+  ["masters_contractors", "Contractor"],
   ["masters_parties", "Party"],
-  ["masters_storeItems", "Saman"],
+  ["masters_storeItems", "Store item"],
   ["masters_staff", "Staff"],
 ];
 
@@ -74,8 +74,8 @@ export function RecycleBin() {
     return () => subs.forEach((u) => u());
   }, [current, toast]);
 
-  if (!can(profile, "recycle.restore")) return <div className="card empty">Recycle Bin sirf Admin ke liye hai.</div>;
-  if (!current) return <div className="card empty">Pehle project chuno.</div>;
+  if (!can(profile, "recycle.restore")) return <div className="card empty">Recycle Bin is for the Admin only.</div>;
+  if (!current) return <div className="card empty">Select a project first.</div>;
 
   const all = Object.values(rows)
     .flat()
@@ -85,7 +85,7 @@ export function RecycleBin() {
     try {
       if (r.kind === "master") await saveMaster(r.col, r.id, { deleted: null }, profile.email, r.data, "RESTORE", reason);
       else await restoreEntry(current.id, r.col, r.id, Number(r.data.rev ?? 1), profile.email, reason);
-      toast(`"${title(r)}" wapas aa gaya ✓`);
+      toast(`"${title(r)}" restored ✓`);
     } catch (e) {
       toast(errorText(e), true);
     }
@@ -97,7 +97,7 @@ export function RecycleBin() {
       // Aaj raat 11:59:59 IST tak
       const till = new Date(istMidnight(addDays(today, 1)).getTime() - 1000);
       await unlockDay(current.id, uDate, till, profile.email, uReason.trim());
-      toast(`${formatDate(uDate)} aaj raat 11:59 tak khul gaya`);
+      toast(`${formatDate(uDate)} reopened until 11:59 PM tonight`);
       setUReason("");
     } catch (err) {
       toast(errorText(err), true);
@@ -106,16 +106,16 @@ export function RecycleBin() {
 
   return (
     <>
-      <PageHead title="Recycle Bin" sub={`${current.name} — hataayi gayi entry aur master, reason ke saath. Sirf Admin wapas la sakta hai.`} />
+      <PageHead title="Recycle Bin" sub={`${current.name} — deleted entries and masters with reasons. Only the Admin can restore.`} />
       <section className="card tbl-wrap">
         <table>
           <thead>
             <tr>
-              <th>Kya</th>
-              <th>Kahan</th>
-              <th>Tarikh</th>
-              <th>Kisne hataya</th>
-              <th>Kyun</th>
+              <th>Item</th>
+              <th>Section</th>
+              <th>Date</th>
+              <th>Deleted by</th>
+              <th>Reason</th>
               <th />
             </tr>
           </thead>
@@ -134,10 +134,10 @@ export function RecycleBin() {
                   <td className="wrap">{r.data.deleted?.reason ?? "—"}</td>
                   <td>
                     {locked ? (
-                      <span className="small muted">Din lock — neeche se din kholo</span>
+                      <span className="small muted">Day locked — reopen it below</span>
                     ) : (
                       <button className="btn sm" onClick={() => setRestoring(r)}>
-                        ↺ Wapas lao
+                        ↺ Restore
                       </button>
                     )}
                   </td>
@@ -146,30 +146,30 @@ export function RecycleBin() {
             })}
           </tbody>
         </table>
-        {all.length === 0 && <div className="empty">Recycle Bin khaali hai</div>}
+        {all.length === 0 && <div className="empty">Recycle Bin is empty</div>}
       </section>
 
       <section className="card">
         <div className="card-head">
           <div>
-            <h2>Locked din kholo</h2>
-            <p className="small muted">2 din ke baad din apne aap lock ho jata hai. Kholne par aaj raat 11:59 tak koi bhi user us din ki entry badal sakta hai (reason ke saath).</p>
+            <h2>Reopen a locked day</h2>
+            <p className="small muted">A day locks automatically after 2 days. Reopening lets any user edit that day's entries (with a reason) until 11:59 PM tonight.</p>
           </div>
         </div>
         <form className="form" onSubmit={doUnlock}>
           <div className="grid-form">
             <div className="field">
-              <label htmlFor="u-date">Kaunsa din</label>
+              <label htmlFor="u-date">Day</label>
               <input id="u-date" type="date" className="input" value={uDate} max={addDays(today, -3)} onChange={(e) => setUDate(e.target.value)} />
             </div>
             <div className="field">
-              <label htmlFor="u-why">Kyun? *</label>
-              <input id="u-why" className="input" value={uReason} onChange={(e) => setUReason(e.target.value)} placeholder="jaise: cement ka bill chhoot gaya" />
+              <label htmlFor="u-why">Reason *</label>
+              <input id="u-why" className="input" value={uReason} onChange={(e) => setUReason(e.target.value)} placeholder="e.g. cement bill was missed" />
             </div>
           </div>
           <div className="actions">
             <button className="btn primary" disabled={uReason.trim().length < 3 || !uDate}>
-              Din kholo (aaj raat tak)
+              Reopen (until tonight)
             </button>
           </div>
         </form>
@@ -177,7 +177,7 @@ export function RecycleBin() {
 
       {restoring && (
         <ReasonDialog
-          title={`"${title(restoring)}" wapas laana hai?`}
+          title={`Restore "${title(restoring)}"?`}
           onCancel={() => setRestoring(null)}
           onConfirm={(reason) => {
             const r = restoring;

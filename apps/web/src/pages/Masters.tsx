@@ -24,82 +24,82 @@ const UNITS: [string, string][] = ["Ltr", "Kg", "MT", "Nos", "Mtr", "Bags", "cu.
 const MASTERS: { col: string; label: string; one: string; fields: Field[] }[] = [
   {
     col: "masters_materials",
-    label: "Maal (Material / Oil)",
-    one: "Material",
+    label: "Material (incl. Oil)",
+    one: "material",
     fields: [
-      { key: "name", label: "Naam", type: "text", required: true, show: true },
+      { key: "name", label: "Name", type: "text", required: true, show: true },
       { key: "group", label: "Group", type: "select", required: true, show: true, options: [["MATERIAL", "Material"], ["FUEL", "Diesel / Fuel"], ["OIL", "Oil & Lubricants"]] },
-      { key: "baseUnit", label: "Hisab ki unit", type: "select", required: true, show: true, options: UNITS, hint: "Balance isi unit mein banega" },
-      { key: "conv.Bucket", label: "1 Bucket = kitna (base unit)", type: "number", hint: "jaise 20 (Ltr) — khaali chhodo agar nahi" },
-      { key: "conv.Drum", label: "1 Drum = kitna (base unit)", type: "number", hint: "jaise 210 (Ltr)" },
-      { key: "conv.Bags", label: "1 Bag = kitna (base unit)", type: "number", hint: "Cement Kg mein ho to 50" },
-      { key: "minStock", label: "Kam stock ki limit", type: "number", show: true, hint: "Isse kam hone par alert" },
+      { key: "baseUnit", label: "Stock unit", type: "select", required: true, show: true, options: UNITS, hint: "Balances are kept in this unit" },
+      { key: "conv.Bucket", label: "1 Bucket = (in stock unit)", type: "number", hint: "e.g. 20 (Ltr) — leave blank if not used" },
+      { key: "conv.Drum", label: "1 Drum = (in stock unit)", type: "number", hint: "e.g. 210 (Ltr)" },
+      { key: "conv.Bags", label: "1 Bag = (in stock unit)", type: "number", hint: "50 if cement is tracked in Kg" },
+      { key: "minStock", label: "Low-stock limit", type: "number", show: true, hint: "Alert when balance falls below this" },
     ],
   },
   {
     col: "masters_machines",
-    label: "Machine",
-    one: "Machine",
+    label: "Machines",
+    one: "machine",
     fields: [
-      { key: "name", label: "Machine ka naam / no.", type: "text", required: true, show: true },
-      { key: "kind", label: "Kiski", type: "select", required: true, show: true, options: [["COMPANY", "Company"], ["RENTAL", "Rental (kiraye)"]] },
-      { key: "ownerParty", label: "Malik / party", type: "text", show: true },
-      { key: "rateType", label: "Rate kis hisab se", type: "select", show: true, options: [["DAY", "Din ke hisab"], ["MONTH", "Mahine ke hisab"], ["HOUR", "Ghante ke hisab"]] },
+      { key: "name", label: "Machine name / no.", type: "text", required: true, show: true },
+      { key: "kind", label: "Ownership", type: "select", required: true, show: true, options: [["COMPANY", "Company-owned"], ["RENTAL", "Rental"]] },
+      { key: "ownerParty", label: "Owner / party", type: "text", show: true },
+      { key: "rateType", label: "Rate basis", type: "select", show: true, options: [["DAY", "Per day"], ["MONTH", "Per month"], ["HOUR", "Per hour"]] },
       { key: "ratePaise", label: "Rate (₹)", type: "money", show: true },
-      { key: "rateFrom", label: "Rate kab se lagu", type: "date" },
-      { key: "siteFrom", label: "Site par kab aayi", type: "date", hint: "Mahine ke beech aayi to pehle ke din bill se minus" },
-      { key: "siteTo", label: "Site se kab gayi", type: "date", hint: "Khaali = abhi site par hai" },
-      { key: "dieselBy", label: "Diesel kiska", type: "select", options: [["SITE", "Site ka"], ["OWNER", "Owner ka"]] },
+      { key: "rateFrom", label: "Rate effective from", type: "date" },
+      { key: "siteFrom", label: "Arrived at site on", type: "date", hint: "If it arrived mid-month, earlier days are deducted from the bill" },
+      { key: "siteTo", label: "Left site on", type: "date", hint: "Blank = still on site" },
+      { key: "dieselBy", label: "Diesel paid by", type: "select", options: [["SITE", "Site"], ["OWNER", "Owner"]] },
       { key: "driver", label: "Driver", type: "text" },
     ],
   },
   {
     col: "masters_contractors",
-    label: "Thekedar",
-    one: "Thekedar",
+    label: "Contractors",
+    one: "contractor",
     fields: [
-      { key: "name", label: "Naam", type: "text", required: true, show: true },
+      { key: "name", label: "Name", type: "text", required: true, show: true },
       { key: "mobile", label: "Mobile", type: "mobile", show: true },
-      { key: "work", label: "Kaam", type: "text", show: true, hint: "jaise: shuttering, bar bending" },
+      { key: "work", label: "Work type", type: "text", show: true, hint: "e.g. shuttering, bar bending" },
     ],
   },
   {
     col: "masters_parties",
-    label: "Party / Vendor",
-    one: "Party",
+    label: "Parties / Vendors",
+    one: "party",
     fields: [
-      { key: "name", label: "Firm ka naam", type: "text", required: true, show: true },
+      { key: "name", label: "Firm name", type: "text", required: true, show: true },
       { key: "contact", label: "Contact person", type: "text" },
       { key: "mobile", label: "Mobile", type: "mobile", show: true },
       { key: "gstin", label: "GSTIN", type: "gstin", show: true },
       { key: "bankAccount", label: "Bank A/C", type: "text" },
       { key: "ifsc", label: "IFSC", type: "ifsc" },
-      { key: "creditDays", label: "Udhaar kitne din", type: "number", show: true },
-      { key: "supplies", label: "Kya deta hai", type: "text", hint: "jaise: Cement, Steel" },
+      { key: "creditDays", label: "Credit period (days)", type: "number", show: true },
+      { key: "supplies", label: "Supplies", type: "text", hint: "e.g. Cement, Steel" },
     ],
   },
   {
     col: "masters_storeItems",
-    label: "Saman (Store)",
-    one: "Saman",
+    label: "Store items",
+    one: "store item",
     fields: [
-      { key: "name", label: "Saman ka naam", type: "text", required: true, show: true },
-      { key: "category", label: "Category", type: "select", required: true, show: true, options: [["RETURNABLE", "Returnable (wapas aata hai)"], ["CONSUMABLE", "Consumable (khatam hota hai)"]] },
+      { key: "name", label: "Item name", type: "text", required: true, show: true },
+      { key: "category", label: "Category", type: "select", required: true, show: true, options: [["RETURNABLE", "Returnable (comes back)"], ["CONSUMABLE", "Consumable (used up)"]] },
       { key: "unit", label: "Unit", type: "select", required: true, show: true, options: UNITS },
-      { key: "tagPrefix", label: "Item no. prefix", type: "text", show: true, hint: "Bade saman ke liye, jaise RCM → RCM-01" },
-      { key: "minStock", label: "Kam stock ki limit", type: "number" },
+      { key: "tagPrefix", label: "Asset no. prefix", type: "text", show: true, hint: "For large items, e.g. RCM → RCM-01" },
+      { key: "minStock", label: "Low-stock limit", type: "number" },
     ],
   },
   {
     col: "masters_staff",
     label: "Staff",
-    one: "Staff",
+    one: "staff member",
     fields: [
-      { key: "name", label: "Naam", type: "text", required: true, show: true },
-      { key: "designation", label: "Pad", type: "text", show: true },
+      { key: "name", label: "Name", type: "text", required: true, show: true },
+      { key: "designation", label: "Designation", type: "text", show: true },
       { key: "mobile", label: "Mobile", type: "mobile", show: true },
-      { key: "aadhaarLast4", label: "Aadhaar ke aakhri 4 ank", type: "last4", hint: "Poora Aadhaar app mein nahi rakhte" },
-      { key: "salaryPaise", label: "Tankhwah / mahina (₹)", type: "money", show: true },
+      { key: "aadhaarLast4", label: "Aadhaar — last 4 digits", type: "last4", hint: "The full Aadhaar number is never stored" },
+      { key: "salaryPaise", label: "Monthly salary (₹)", type: "money", show: true },
       { key: "ifsc", label: "IFSC", type: "ifsc" },
     ],
   },
@@ -144,15 +144,15 @@ export function Masters() {
   const softDelete = async (r: Row, reason: string) => {
     try {
       await saveMaster(m.col, r.id, { deleted: { by: profile.email, reason, at: serverTimestamp() } }, profile.email, r, "DELETE", reason);
-      toast(`"${r.name}" hata diya — Recycle Bin mein`);
+      toast(`"${r.name}" deleted — moved to Recycle Bin`);
     } catch (e) {
       toast(errorText(e), true);
     }
   };
   const restore = async (r: Row) => {
     try {
-      await saveMaster(m.col, r.id, { deleted: null }, profile.email, r, "RESTORE", "Admin ne wapas laya");
-      toast(`"${r.name}" wapas aa gaya`);
+      await saveMaster(m.col, r.id, { deleted: null }, profile.email, r, "RESTORE", "Restored by Admin");
+      toast(`"${r.name}" restored`);
     } catch (e) {
       toast(errorText(e), true);
     }
@@ -160,10 +160,10 @@ export function Masters() {
 
   return (
     <>
-      <PageHead title="Master list" sub="Ek baar yahan jodo — har entry mein dropdown mein aayega">
+      <PageHead title="Masters" sub="Add once here — they appear in every entry dropdown">
         {editable && (
           <button className="btn primary" onClick={() => setEditing("new")}>
-            ＋ Naya {m.one}
+            ＋ New {m.one}
           </button>
         )}
       </PageHead>
@@ -180,7 +180,7 @@ export function Masters() {
             {m.label} <span className="muted small">({visible.filter((r) => !r.deleted).length})</span>
           </h2>
           <label className="check small">
-            <input type="checkbox" checked={showDeleted} onChange={(e) => setShowDeleted(e.target.checked)} /> Hataye hue bhi dikhao
+            <input type="checkbox" checked={showDeleted} onChange={(e) => setShowDeleted(e.target.checked)} /> Show deleted
           </label>
         </div>
         <div className="tbl-wrap">
@@ -204,21 +204,21 @@ export function Masters() {
                       {!r.deleted && editable && (
                         <>
                           <button className="btn sm" onClick={() => setEditing(r)}>
-                            ✎ Badlo
+                            ✎ Edit
                           </button>
                           <button className="btn sm danger" onClick={() => setRemoving(r)}>
-                            🗑 Hatao
+                            🗑 Delete
                           </button>
                         </>
                       )}
                       {r.deleted && (
                         <>
                           <span className="small muted" style={{ textDecoration: "none" }}>
-                            Kyun: {String(r.deleted.reason)}
+                            Reason: {String(r.deleted.reason)}
                           </span>
                           {can(profile, "recycle.restore") && (
                             <button className="btn sm" onClick={() => restore(r)}>
-                              ↺ Wapas lao
+                              ↺ Restore
                             </button>
                           )}
                         </>
@@ -229,13 +229,13 @@ export function Masters() {
               ))}
             </tbody>
           </table>
-          {visible.length === 0 && <div className="empty">Abhi koi {m.one} nahi. {editable ? `"＋ Naya ${m.one}" dabao.` : ""}</div>}
+          {visible.length === 0 && <div className="empty">No {m.one} yet. {editable ? `Tap "＋ New ${m.one}".` : ""}</div>}
         </div>
       </section>
       {editing && <MasterForm m={m} row={editing === "new" ? null : editing} onClose={() => setEditing(null)} />}
       {removing && (
         <ReasonDialog
-          title={`"${removing.name}" hatana hai?`}
+          title={`Delete "${removing.name}"?`}
           onCancel={() => setRemoving(null)}
           onConfirm={(reason) => {
             const r = removing;
@@ -264,11 +264,11 @@ function MasterForm({ m, row, onClose }: { m: (typeof MASTERS)[number]; row: Row
 
   const check = (f: Field): { err?: string; warn?: string } => {
     const v = vals[f.key]?.trim() ?? "";
-    if (!v) return f.required ? { err: "Zaroori hai" } : {};
-    if ((f.type === "number" || f.type === "money") && (!Number.isFinite(Number(v)) || Number(v) < 0)) return { err: "Sahi number likho" };
-    if (f.type === "mobile" && !normalizeMobile(v)) return { err: "10 ank ka mobile (6–9 se shuru)" };
-    if (f.type === "ifsc" && !isIfsc(v)) return { err: "IFSC jaise SBIN0001842" };
-    if (f.type === "last4" && !/^\d{4}$/.test(v)) return { err: "Sirf 4 ank" };
+    if (!v) return f.required ? { err: "Required" } : {};
+    if ((f.type === "number" || f.type === "money") && (!Number.isFinite(Number(v)) || Number(v) < 0)) return { err: "Enter a valid number" };
+    if (f.type === "mobile" && !normalizeMobile(v)) return { err: "10-digit mobile starting with 6–9" };
+    if (f.type === "ifsc" && !isIfsc(v)) return { err: "IFSC like SBIN0001842" };
+    if (f.type === "last4" && !/^\d{4}$/.test(v)) return { err: "Exactly 4 digits" };
     if (f.type === "gstin") {
       const g = checkGstin(v);
       return g.ok ? (g.warning ? { warn: g.warning } : {}) : { err: g.error! };
@@ -298,7 +298,7 @@ function MasterForm({ m, row, onClose }: { m: (typeof MASTERS)[number]; row: Row
     setBusy(true);
     try {
       await saveMaster(m.col, row?.id ?? null, data, profile.email, row, row ? "UPDATE" : "CREATE", row ? reason.trim() : null);
-      toast(row ? "Badal diya ✓" : `${m.one} jud gaya ✓`);
+      toast(row ? "Updated ✓" : `New ${m.one} added ✓`);
       onClose();
     } catch (err) {
       toast(errorText(err), true);
@@ -308,7 +308,7 @@ function MasterForm({ m, row, onClose }: { m: (typeof MASTERS)[number]; row: Row
   };
 
   return (
-    <Dialog title={row ? `${m.one} badlo` : `Naya ${m.one}`} onClose={onClose}>
+    <Dialog title={row ? `Edit ${m.one}` : `New ${m.one}`} onClose={onClose}>
       <form className="form" onSubmit={save}>
         <div className="grid-form">
           {m.fields.map((f, i) => {
@@ -346,17 +346,17 @@ function MasterForm({ m, row, onClose }: { m: (typeof MASTERS)[number]; row: Row
         </div>
         {row && (
           <div className="field">
-            <label htmlFor="edit-reason">Badalne ka kaaran *</label>
-            <input id="edit-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="jaise: rate badla, naam galat tha" />
-            <span className="hint">Edit History mein purani aur nayi value ke saath rahega.</span>
+            <label htmlFor="edit-reason">Reason for change *</label>
+            <input id="edit-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. rate changed, name was wrong" />
+            <span className="hint">Saved in Edit History with the old and new values.</span>
           </div>
         )}
         <div className="actions">
           <button type="button" className="btn" onClick={onClose}>
-            Radd
+            Cancel
           </button>
           <button type="submit" className="btn primary" disabled={!valid || busy}>
-            {busy ? "Save ho raha…" : "Save karo"}
+            {busy ? "Saving…" : "Save"}
           </button>
         </div>
       </form>

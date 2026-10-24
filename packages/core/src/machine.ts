@@ -44,13 +44,13 @@ export function machineDay(log: MachineLogInput, m: MachineMaster, s: RentalSett
   if (m.kind !== "COMPANY" && m.ratePaise != null && (m.rateType === "DAY" || m.rateType === "HOUR")) {
     if (idle) amountPaise = 0;
     else if (m.rateType === "HOUR" || log.status === "HOUR") {
-      if (hours === null) warning = warning ?? "SR / CR bharo — ghante ke bina amount nahi banega";
+      if (hours === null) warning = warning ?? "Enter SR / CR — amount needs running hours";
       else amountPaise = dayRentalPaise(m.rateType, m.ratePaise, { businessDate: log.businessDate, status: log.status, hours }, s);
     } else {
       amountPaise = dayRentalPaise("DAY", m.ratePaise, { businessDate: log.businessDate, status: log.status }, s);
     }
   }
-  if (!idle && (log.dieselLtr ?? 0) < 0) warning = "Diesel negative nahi ho sakta";
+  if (!idle && (log.dieselLtr ?? 0) < 0) warning = "Diesel cannot be negative";
   return {
     status: log.status,
     hours,

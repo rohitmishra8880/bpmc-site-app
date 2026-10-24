@@ -24,6 +24,7 @@
 - ✅ Tests: core 71, rules 31, **server e2e 12/12** (Apps Script code emulator par — `npm run test:server`)
 - ✅ Logo (G:\My Drive\B.P MISHRA PROFILE\logo\BPMC_logo.png se copy, original nahi chhua): header, sidebar, login, favicon, Dashboard watermark
 - 📌 Rohit: **har DPR mein logo watermark** (Phase 3 PDF / print / Obsidian) — yahi logo
+- 📌 Rohit (24 Oct): **App UI sirf English.** DPR mein labels **English / हिंदी** (slash se), jaise "Opening Stock / पुराना स्टॉक". App mein Hindi toggle nahi chahiye.
 - ⏳ Baaki Phase 2: Attendance, Store / Saman Register, Daily Work + Drive photos, Creditors
 
 ## Phase 1 — haal (24 Oct 2026) ✅

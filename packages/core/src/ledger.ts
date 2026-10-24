@@ -9,7 +9,7 @@ export interface LineAmount {
 
 /** Kul rakam = Qty × Rate (+ GST) → 10 × ₹450 + 18% = ₹5,310 */
 export function lineAmount(qty: number, ratePaise: Paise, gstPct = 0): LineAmount {
-  if (gstPct < 0 || gstPct > 100) throw new Error(`GST % galat: ${gstPct}`);
+  if (gstPct < 0 || gstPct > 100) throw new Error(`Invalid GST %: ${gstPct}`);
   const basePaise = roundHalfUp(qty * ratePaise);
   const gstPaise = roundHalfUp((basePaise * gstPct) / 100);
   return { basePaise, gstPaise, totalPaise: basePaise + gstPaise };
@@ -36,7 +36,7 @@ export function partyBalance(entries: LedgerEntry[]): PartyBalance {
   let paid = 0;
   for (const e of entries) {
     if (e.deleted) continue;
-    if (e.amountPaise < 0) throw new Error("Khata entry ki rakam negative nahi ho sakti");
+    if (e.amountPaise < 0) throw new Error("Ledger amount cannot be negative");
     if (e.type === "BILL") bill += e.amountPaise;
     else if (e.type === "PAYMENT") paid += e.amountPaise;
     else bill -= e.amountPaise;

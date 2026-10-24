@@ -7,11 +7,11 @@ import type { AuditDoc } from "../lib/types";
 import { errorText, PageHead, useToast } from "../lib/ui";
 
 const ACTION: Record<AuditDoc["action"], [string, string]> = {
-  CREATE: ["Naya bana", "ok"],
-  UPDATE: ["Badla", "warn"],
-  DELETE: ["Hataya", "crit"],
-  RESTORE: ["Wapas laya", "info"],
-  OPEN: ["Kholi", "neutral"],
+  CREATE: ["Created", "ok"],
+  UPDATE: ["Edited", "warn"],
+  DELETE: ["Deleted", "crit"],
+  RESTORE: ["Restored", "info"],
+  OPEN: ["Opened", "neutral"],
 };
 
 function val(v: unknown): string {
@@ -37,28 +37,28 @@ export function EditHistory() {
     );
   }, [scope, current, toast]);
 
-  if (!can(profile, "audit.read")) return <div className="card empty">Edit History sirf Admin dekh sakta hai.</div>;
+  if (!can(profile, "audit.read")) return <div className="card empty">Only the Admin can view Edit History.</div>;
 
   return (
     <>
-      <PageHead title="Edit History" sub="Kisne kya kiya, purani → nayi value, kab, kyun — koi (Admin bhi) mita nahi sakta" />
+      <PageHead title="Edit History" sub="Who did what, old → new value, when and why — nobody (not even Admin) can delete it" />
       <div className="tabs" role="group">
         <button className="tab" aria-pressed={scope === "project"} onClick={() => setScope("project")}>
-          Site entry — {current?.name ?? "—"}
+          Site entries — {current?.name ?? "—"}
         </button>
         <button className="tab" aria-pressed={scope === "global"} onClick={() => setScope("global")}>
-          Master list, users, project
+          Masters, users, projects
         </button>
       </div>
       <section className="card tbl-wrap">
         <table>
           <thead>
             <tr>
-              <th>Kab</th>
-              <th>Kaun</th>
-              <th>Kya</th>
-              <th>Purani → nayi</th>
-              <th>Kyun</th>
+              <th>When</th>
+              <th>Who</th>
+              <th>What</th>
+              <th>Old → new</th>
+              <th>Reason</th>
               <th>Device</th>
             </tr>
           </thead>
@@ -91,7 +91,7 @@ export function EditHistory() {
             })}
           </tbody>
         </table>
-        {rows.length === 0 && <div className="empty">Abhi koi record nahi</div>}
+        {rows.length === 0 && <div className="empty">No records yet</div>}
       </section>
     </>
   );

@@ -24,7 +24,7 @@ const NAV: { group: string | null; items: NavItem[] }[] = [
       { to: "/", ic: "▦", label: "Dashboard" },
       { to: "/projects", ic: "🗂️", label: "Projects" },
       { to: "/inventory", ic: "📦", label: "Inventory (Material Hub)" },
-      { to: "/store", ic: "🧰", label: "Store / Saman Register", soon: "P2" },
+      { to: "/store", ic: "🧰", label: "Store Register", soon: "P2" },
       { to: "/machinery", ic: "🔧", label: "Machinery" },
       { to: "/attendance", ic: "👥", label: "Attendance", soon: "P2" },
       { to: "/work", ic: "📅", label: "Daily Work", soon: "P2" },
@@ -32,9 +32,9 @@ const NAV: { group: string | null; items: NavItem[] }[] = [
       { to: "/reports", ic: "📄", label: "Reports (DPR)", soon: "P3" },
     ],
   },
-  { group: "Master list", items: [{ to: "/masters", ic: "📋", label: "Masters (maal, machine, party…)" }] },
+  { group: "Master data", items: [{ to: "/masters", ic: "📋", label: "Masters" }] },
   {
-    group: "Madad",
+    group: "Help",
     items: [
       { to: "/ai", ic: "✨", label: "AI Insights", soon: "P4" },
       { to: "/help", ic: "❔", label: "Help Center", soon: "P4" },
@@ -92,7 +92,7 @@ export function Shell() {
     <>
       <header className="top">
         <div className="top-inner">
-          <button className="icon menu-btn" onClick={() => setOpen(true)} aria-label="Menu kholo">
+          <button className="icon menu-btn" onClick={() => setOpen(true)} aria-label="Open menu">
             ☰
           </button>
           <div className="logo">
@@ -103,7 +103,7 @@ export function Shell() {
             </div>
           </div>
           {projects.length > 0 && (
-            <select className="site-sel" value={current?.id ?? ""} onChange={(e) => select(e.target.value)} aria-label="Site badlo">
+            <select className="site-sel" value={current?.id ?? ""} onChange={(e) => select(e.target.value)} aria-label="Switch site">
               {projects.map((p) => (
                 <option key={p.id} value={p.id}>
                   🏢 {p.name}
@@ -115,13 +115,13 @@ export function Shell() {
           {APP_ENV === "test" && <span className="pill warn">TEST</span>}
           <span className={`pill ${online ? "ok" : "warn"}`}>
             <span className="dot" />
-            {online ? "Online" : "Offline — entry phone mein rukegi"}
+            {online ? "Online" : "Offline — entries saved on phone"}
           </span>
           <span className="when">{formatDate(toBusinessDateIST(new Date()))}</span>
-          <button className="icon" onClick={cycleTheme} aria-label="Rang: light / dark / dhoop">
+          <button className="icon" onClick={cycleTheme} aria-label="Theme: light / dark / sunlight">
             ◐
           </button>
-          <button className="avatar" title={`${profile.name} · ${profile.isAdmin ? "Admin" : profile.role} — logout`} onClick={() => logout()}>
+          <button className="avatar" title={`${profile.name} · ${profile.isAdmin ? "Admin" : profile.role} — click to sign out`} onClick={() => logout()}>
             {initials || "?"}
           </button>
         </div>
@@ -131,8 +131,8 @@ export function Shell() {
           <div className="proj-card">
             <Logo size={40} />
             <div>
-              <b>{current?.name ?? "Koi project nahi"}</b>
-              <span>{current ? `${current.code} · Site` : "Admin se project maango"}</span>
+              <b>{current?.name ?? "No project"}</b>
+              <span>{current ? `${current.code} · Site` : "Ask the Admin for a project"}</span>
             </div>
           </div>
           <nav>
@@ -165,7 +165,7 @@ export function Shell() {
   );
 }
 
-/** Abhi na bane section — saaf bata do kab aayega (dummy data nahi) */
+/** Section not built yet — say clearly when it comes (no dummy data) */
 export function Soon({ title, phase, what }: { title: string; phase: string; what: string }) {
   return (
     <>
@@ -177,7 +177,7 @@ export function Soon({ title, phase, what }: { title: string; phase: string; wha
       </div>
       <div className="card empty">
         <p>
-          Yeh section <b>{phase}</b> mein banega. Design taiyaar hai (design v2), entry ka kaam agle phase mein.
+          This section is coming in <b>{phase}</b>. The design is ready; data entry will be added next.
         </p>
       </div>
     </>

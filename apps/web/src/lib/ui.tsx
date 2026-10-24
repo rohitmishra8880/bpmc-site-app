@@ -23,12 +23,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
 export const useToast = () => useContext(ToastCtx);
 
-/** Firestore / rules ki galti ko site wali bhasha mein */
+/** Firestore / rules errors in plain words */
 export function errorText(e: unknown): string {
   const code = (e as { code?: string })?.code ?? "";
-  if (code.includes("permission-denied")) return "Ijazat nahi — yeh kaam aapke role mein nahi hai, ya din lock ho chuka hai.";
-  if (code.includes("unavailable")) return "Network nahi — entry phone mein rakh li, network aate hi jayegi.";
-  return (e as Error)?.message ?? "Kuch galat hua";
+  if (code.includes("permission-denied")) return "Not allowed — your role cannot do this, or the day is locked.";
+  if (code.includes("unavailable")) return "No network — saved on this phone, will sync when online.";
+  return (e as Error)?.message ?? "Something went wrong";
 }
 
 export function PageHead({ title, sub, children }: { title: string; sub?: string; children?: ReactNode }) {
@@ -49,7 +49,7 @@ export function Dialog({ title, onClose, children }: { title: string; onClose: (
       <div className="dlg" role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()}>
         <div className="card-head">
           <h2>{title}</h2>
-          <button className="icon" onClick={onClose} aria-label="Band karo">
+          <button className="icon" onClick={onClose} aria-label="Close">
             ✕
           </button>
         </div>
@@ -59,7 +59,7 @@ export function Dialog({ title, onClose, children }: { title: string; onClose: (
   );
 }
 
-/** Hatane (soft-delete) ke liye reason maangna — browser ka prompt viewer mein nahi chalta */
+/** Ask for a reason (delete / restore) — browser prompt() is not reliable */
 export function ReasonDialog({ title, onCancel, onConfirm }: { title: string; onCancel: () => void; onConfirm: (reason: string) => void }) {
   const [reason, setReason] = useState("");
   const ok = reason.trim().length >= 3;
@@ -73,16 +73,16 @@ export function ReasonDialog({ title, onCancel, onConfirm }: { title: string; on
         }}
       >
         <div className="field">
-          <label htmlFor="reason">Kyun? (zaroori)</label>
-          <input id="reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="jaise: galat naam se bana" autoFocus />
-          <span className="hint">Yeh Edit History mein hamesha rahega.</span>
+          <label htmlFor="reason">Reason (required)</label>
+          <input id="reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. entered twice by mistake" autoFocus />
+          <span className="hint">Kept permanently in Edit History.</span>
         </div>
         <div className="actions">
           <button type="button" className="btn" onClick={onCancel}>
-            Radd
+            Cancel
           </button>
           <button type="submit" className="btn primary" disabled={!ok}>
-            Haan, karo
+            Confirm
           </button>
         </div>
       </form>

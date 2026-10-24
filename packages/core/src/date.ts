@@ -14,7 +14,7 @@ export function isBusinessDate(s: string): boolean {
 }
 
 function assertDate(s: string): void {
-  if (!isBusinessDate(s)) throw new Error(`Galat tarikh: "${s}" (YYYY-MM-DD chahiye)`);
+  if (!isBusinessDate(s)) throw new Error(`Invalid date: "${s}" (expected YYYY-MM-DD)`);
 }
 
 export function toBusinessDateIST(at: Date): string {

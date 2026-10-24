@@ -40,7 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       /* private window */
     }
-    if (!email) email = window.prompt("Login poora karne ke liye apna email dobara likho") ?? "";
+    if (!email) email = window.prompt("Please enter your email again to finish signing in") ?? "";
     signInWithEmailLink(auth, email, window.location.href)
       .then(() => {
         try {

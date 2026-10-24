@@ -9,7 +9,8 @@ import { useProjects } from "../lib/projects";
 import { Dialog, errorText, PageHead, ReasonDialog, useToast } from "../lib/ui";
 
 const GROUP_LABEL: Record<string, string> = { FUEL: "Diesel / Fuel", MATERIAL: "Material", OIL: "Oil & Lubricants" };
-const PAY: [string, string][] = [["NAKAD", "Nakad"], ["UDHAAR", "Udhaar"], ["UPI", "UPI"], ["CHEQUE", "Cheque"]];
+const PAY: [string, string][] = [["NAKAD", "Cash"], ["UDHAAR", "Credit"], ["UPI", "UPI"], ["CHEQUE", "Cheque"]];
+const PAY_LABEL = Object.fromEntries(PAY) as Record<string, string>;
 
 export function Inventory() {
   const profile = useProfile();
@@ -33,14 +34,14 @@ export function Inventory() {
   const bal: DayItemBalance | undefined = item ? day?.stock?.[item.id] : undefined;
   const open = canEditDate(date, new Date(), unlock ? { expiresAt: unlock } : null) && can(profile, "entry.create");
 
-  if (!current) return <div className="card empty">Pehle project chuno.</div>;
-  if (!item) return <div className="card empty">Masters mein koi material nahi. Pehle Masters → Maal mein jodo.</div>;
+  if (!current) return <div className="card empty">Select a project first.</div>;
+  if (!item) return <div className="card empty">No materials yet. Add them under Masters → Material.</div>;
   const u = item.baseUnit as string;
 
   const remove = async (e: Entry, reason: string) => {
     try {
       await writeEntries(current.id, profile.email, [softDeleteWrite("stockMoves", e, profile.email, reason)], reason);
-      toast("Hata diya — Recycle Bin mein");
+      toast("Deleted — moved to Recycle Bin");
     } catch (err) {
       toast(errorText(err), true);
     }
@@ -51,7 +52,7 @@ export function Inventory() {
 
   return (
     <>
-      <DateBar title="Inventory & Material Stock" sub={`${current.name} — maal aaya, kharch aur baaki`} date={date} onChange={setDate} pending={pending} unlockedTill={unlock} />
+      <DateBar title="Inventory & Material Stock" sub={`${current.name} — received, used and balance`} date={date} onChange={setDate} pending={pending} unlockedTill={unlock} />
       <div className="tabs" role="group" aria-label="Material">
         {groups.flatMap((g) =>
           materials
@@ -65,50 +66,50 @@ export function Inventory() {
         )}
         {can(profile, "masters.edit") && (
           <Link className="tab" to="/masters" style={{ textDecoration: "none", color: "inherit" }}>
-            ＋ Material jodo
+            ＋ Add material
           </Link>
         )}
       </div>
-      <PageHead title={`${item.name}`} sub={`${GROUP_LABEL[item.group as string] ?? "Material"} · hisab ${u} mein`}>
+      <PageHead title={`${item.name}`} sub={`${GROUP_LABEL[item.group as string] ?? "Material"} · tracked in ${u}`}>
         {open && (
           <>
             <button className="btn dark" onClick={() => setForm({ kind: "IN", row: null })}>
-              ＋ Aaya (Inward)
+              ＋ Received (Inward)
             </button>
             <button className="btn primary" onClick={() => setForm({ kind: "USE", row: null })}>
-              ＋ Kharch / Diya
+              ＋ Used / Issued
             </button>
           </>
         )}
       </PageHead>
       <div className="stats">
-        <Stat label="Purana stock" v={bal?.opening} u={u} foot="Kal ka closing = aaj ka opening" />
-        <Stat label="Naya (aaya)" v={bal?.inward} u={u} foot={`${inward.length} entry`} />
-        <Stat label="Kul kharch" v={bal?.uses} u={u} foot={`${uses.length} entry`} />
-        <Stat label="Abhi baaki" v={bal?.closing} u={u} foot={isLow ? `Limit ${item.minStock} se kam!` : "Server ka hisab"} tone={isLow ? "crit" : "ok"} />
+        <Stat label="Opening stock" v={bal?.opening} u={u} foot="Yesterday's closing = today's opening" />
+        <Stat label="Received" v={bal?.inward} u={u} foot={`${inward.length} ${inward.length === 1 ? "entry" : "entries"}`} />
+        <Stat label="Used" v={bal?.uses} u={u} foot={`${uses.length} ${uses.length === 1 ? "entry" : "entries"}`} />
+        <Stat label="Balance" v={bal?.closing} u={u} foot={isLow ? `Below limit of ${item.minStock}!` : "Calculated by server"} tone={isLow ? "crit" : "ok"} />
       </div>
-      {!bal && <p className="small muted">Is din ka hisab abhi nahi bana — entry hote hi server 5 minute mein banayega.</p>}
-      {bal && bal.adjust !== 0 && <p className="small muted">Adjust (gin-ti sudhaar): {formatQty(bal.adjust, 3)} {u}</p>}
+      {!bal && <p className="small muted">No calculation for this day yet — the server calculates within 5 minutes of an entry.</p>}
+      {bal && bal.adjust !== 0 && <p className="small muted">Adjustment (count correction): {formatQty(bal.adjust, 3)} {u}</p>}
 
       <div className="mods" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", alignItems: "start" }}>
-        <MoveList title="Aaya (naya stock)" rows={inward} unit={u} empty={`Is din ${item.name} nahi aaya`} open={open} onEdit={(r) => setForm({ kind: "IN", row: r })} onDelete={setRemoving} />
-        <MoveList title="Kharch / diya" rows={uses} unit={u} empty="Is din kharch nahi" open={open} onEdit={(r) => setForm({ kind: "USE", row: r })} onDelete={setRemoving} />
+        <MoveList title="Received (new stock)" rows={inward} unit={u} empty={`No ${item.name} received on this day`} open={open} onEdit={(r) => setForm({ kind: "IN", row: r })} onDelete={setRemoving} />
+        <MoveList title="Used / issued" rows={uses} unit={u} empty="Nothing used on this day" open={open} onEdit={(r) => setForm({ kind: "USE", row: r })} onDelete={setRemoving} />
       </div>
       {bal && (
         <section className="card" style={{ padding: 16 }}>
-          <b>Stock ka hisab</b>
+          <b>Stock calculation</b>
           <p style={{ marginTop: 6 }}>
             {formatQty(bal.opening, 3)} + {formatQty(bal.inward, 3)} − {formatQty(bal.uses, 3)}
             {bal.adjust ? ` ${bal.adjust > 0 ? "+" : "−"} ${formatQty(Math.abs(bal.adjust), 3)}` : ""} = <b>{formatQty(bal.closing, 3)} {u}</b>
           </p>
-          <p className="small muted">Server ka hisab — haath se type nahi. Pichhla din badla to aage ke din khud theek hote hain.</p>
+          <p className="small muted">Calculated by the server — never typed by hand. Editing a past day updates all later days automatically.</p>
         </section>
       )}
 
       {form && <StockForm kind={form.kind} item={item} row={form.row} date={date} onClose={() => setForm(null)} />}
       {removing && (
         <ReasonDialog
-          title="Yeh entry hatani hai?"
+          title="Delete this entry?"
           onCancel={() => setRemoving(null)}
           onConfirm={(r) => {
             const e = removing;
@@ -163,11 +164,11 @@ function MoveList({ title, rows, unit, empty, open, onEdit, onDelete }: {
               <div className="small muted">
                 {[
                   r.unitEntered && r.unitEntered !== unit ? `${formatQty(r.qtyEntered, 3)} ${r.unitEntered}` : null,
-                  r.payMode,
+                  r.payMode && PAY_LABEL[r.payMode],
                   r.billNo && `Bill ${r.billNo}`,
                   r.ratePaise != null && `${formatINR(r.ratePaise)}/${unit}${r.gstPct ? ` + ${r.gstPct}% GST` : ""}`,
                   r.vehicle,
-                  fromMachine && "Machinery log se",
+                  fromMachine && "From machine log",
                   r.remark,
                 ]
                   .filter(Boolean)
@@ -181,17 +182,17 @@ function MoveList({ title, rows, unit, empty, open, onEdit, onDelete }: {
               </b>
               {open && !fromMachine && (
                 <span className="actions">
-                  <button className="btn sm" onClick={() => onEdit(r)}>
+                  <button className="btn sm" onClick={() => onEdit(r)} aria-label="Edit">
                     ✎
                   </button>
-                  <button className="btn sm danger" onClick={() => onDelete(r)}>
+                  <button className="btn sm danger" onClick={() => onDelete(r)} aria-label="Delete">
                     🗑
                   </button>
                 </span>
               )}
               {fromMachine && (
                 <Link className="small" to="/machinery">
-                  Machinery mein badlo
+                  Edit in Machinery
                 </Link>
               )}
             </div>
@@ -230,7 +231,7 @@ function StockForm({ kind, item, row, date, onClose }: { kind: "IN" | "USE"; ite
   let baseQty: number | null = null;
   let qtyErr: string | null = null;
   if (v.qty) {
-    if (!Number.isFinite(qtyNum) || qtyNum <= 0) qtyErr = "Sahi matra likho (0 se zyada)";
+    if (!Number.isFinite(qtyNum) || qtyNum <= 0) qtyErr = "Enter a valid quantity (more than 0)";
     else
       try {
         baseQty = toBaseQty(qtyNum, v.unit, { baseUnit: base, conversions: item.conversions ?? {} });
@@ -261,7 +262,7 @@ function StockForm({ kind, item, row, date, onClose }: { kind: "IN" | "USE"; ite
     setBusy(true);
     try {
       await writeEntries(current.id, profile.email, [{ col: "stockMoves", id: row?.id, data, current: row, action: row ? "UPDATE" : "CREATE" }], row ? reason.trim() : null);
-      toast(navigator.onLine ? "Save ho gaya ✓ · server hisab kar raha hai ⏳" : "Phone mein save — network aate hi jayega");
+      toast(navigator.onLine ? "Saved ✓ · server is calculating ⏳" : "Saved on this phone — will sync when online");
       onClose();
     } catch (err) {
       toast(errorText(err), true);
@@ -271,16 +272,16 @@ function StockForm({ kind, item, row, date, onClose }: { kind: "IN" | "USE"; ite
   };
 
   return (
-    <Dialog title={`${item.name} — ${kind === "IN" ? "aaya" : "kharch / diya"}${row ? " (badlo)" : ""}`} onClose={onClose}>
+    <Dialog title={`${item.name} — ${kind === "IN" ? "received" : "used / issued"}${row ? " (edit)" : ""}`} onClose={onClose}>
       <form className="form" onSubmit={save}>
         {kind === "USE" && isDiesel && (
           <p className="small" style={{ background: "var(--accent-soft)", padding: 10, borderRadius: 10 }}>
-            Machine ko diesel diya? <Link to="/machinery">Machinery log</Link> mein bharo — wahi se yahan aa jayega. Yahan sirf baaki (gaadi, tanker, aur) ke liye.
+            Diesel given to a machine? Enter it in the <Link to="/machinery">Machinery log</Link> — it will appear here automatically. Use this form only for others (vehicles, tankers, etc.).
           </p>
         )}
         <div className="grid-form">
           <div className="field">
-            <label htmlFor="s-qty">Kitna *</label>
+            <label htmlFor="s-qty">Quantity *</label>
             <input id="s-qty" className="input" inputMode="decimal" value={v.qty} onChange={set("qty")} autoFocus style={{ fontSize: 22, fontWeight: 700 }} />
             {qtyErr ? <span className="err">{qtyErr}</span> : baseQty !== null && v.unit !== base ? <span className="hint">= {formatQty(baseQty, 3)} {base}</span> : null}
           </div>
@@ -298,7 +299,7 @@ function StockForm({ kind, item, row, date, onClose }: { kind: "IN" | "USE"; ite
           {kind === "IN" ? (
             <>
               <div className="field">
-                <span style={{ fontWeight: 600, fontSize: 14 }}>Bhugtan</span>
+                <span style={{ fontWeight: 600, fontSize: 14 }}>Payment</span>
                 <div className="checks">
                   {PAY.map(([k, l]) => (
                     <button type="button" key={k} className="tab" aria-pressed={v.payMode === k} onClick={() => setV({ ...v, payMode: k })}>
@@ -308,7 +309,7 @@ function StockForm({ kind, item, row, date, onClose }: { kind: "IN" | "USE"; ite
                 </div>
               </div>
               <div className="field">
-                <label htmlFor="s-party">Dukaan / Party {needParty && "*"}</label>
+                <label htmlFor="s-party">Supplier / Party {needParty && "*"}</label>
                 <select id="s-party" className="input" value={v.partyId} onChange={set("partyId")}>
                   <option value="">—</option>
                   {parties.map((p) => (
@@ -317,7 +318,7 @@ function StockForm({ kind, item, row, date, onClose }: { kind: "IN" | "USE"; ite
                     </option>
                   ))}
                 </select>
-                <span className="hint">{needParty ? "Udhaar → is party ke khate mein bill khud banega" : "Party list Masters mein"}</span>
+                <span className="hint">{needParty ? "Credit → a bill is added to this party's ledger automatically" : "Parties are managed under Masters"}</span>
               </div>
               <div className="field">
                 <label htmlFor="s-rate">Rate ₹ / {base}</label>
@@ -332,14 +333,14 @@ function StockForm({ kind, item, row, date, onClose }: { kind: "IN" | "USE"; ite
                 <input id="s-bill" className="input" value={v.billNo} onChange={set("billNo")} />
               </div>
               <div className="field">
-                <label htmlFor="s-veh">Kisne laaya / gaadi no.</label>
+                <label htmlFor="s-veh">Brought by / vehicle no.</label>
                 <input id="s-veh" className="input" value={v.vehicle} onChange={set("vehicle")} />
               </div>
             </>
           ) : (
             <>
               <div className="field">
-                <label htmlFor="s-zone">Kahan / kis kaam</label>
+                <label htmlFor="s-zone">Where / which work</label>
                 <select id="s-zone" className="input" value={v.zone} onChange={set("zone")}>
                   <option value="">—</option>
                   {(current?.zones ?? []).map((z) => (
@@ -348,8 +349,8 @@ function StockForm({ kind, item, row, date, onClose }: { kind: "IN" | "USE"; ite
                 </select>
               </div>
               <div className="field">
-                <label htmlFor="s-to">Kisko diya</label>
-                <input id="s-to" className="input" value={v.issuedTo} onChange={set("issuedTo")} placeholder={isDiesel ? "jaise: paani tanker, bike" : "jaise: Suraj (thekedar)"} />
+                <label htmlFor="s-to">Issued to</label>
+                <input id="s-to" className="input" value={v.issuedTo} onChange={set("issuedTo")} placeholder={isDiesel ? "e.g. water tanker, bike" : "e.g. Suraj (contractor)"} />
               </div>
             </>
           )}
@@ -360,16 +361,16 @@ function StockForm({ kind, item, row, date, onClose }: { kind: "IN" | "USE"; ite
         </div>
         {row && (
           <div className="field">
-            <label htmlFor="s-why">Badalne ka kaaran *</label>
-            <input id="s-why" className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="jaise: galat number" />
+            <label htmlFor="s-why">Reason for change *</label>
+            <input id="s-why" className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. wrong quantity" />
           </div>
         )}
         <div className="actions">
           <button type="button" className="btn" onClick={onClose}>
-            Radd
+            Cancel
           </button>
           <button className="btn primary" disabled={!valid || busy}>
-            Save karo
+            Save
           </button>
         </div>
       </form>

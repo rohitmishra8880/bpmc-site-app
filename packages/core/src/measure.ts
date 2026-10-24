@@ -3,8 +3,8 @@ import { roundHalfUp } from "./money";
 
 /** Machine ghante = CR − SR → 2951.8 − 2944.0 = 7.8 */
 export function machineHours(sr: number, cr: number): number {
-  if (!Number.isFinite(sr) || !Number.isFinite(cr)) throw new Error("SR / CR number hona chahiye");
-  if (cr < sr) throw new Error(`CR (${cr}) SR (${sr}) se kam nahi ho sakta`);
+  if (!Number.isFinite(sr) || !Number.isFinite(cr)) throw new Error("SR / CR must be numbers");
+  if (cr < sr) throw new Error(`CR (${cr}) cannot be less than SR (${sr})`);
   return roundHalfUp(cr - sr, 2);
 }
 
@@ -59,6 +59,6 @@ export interface ItemUnits {
 export function toBaseQty(qty: number, unit: Unit, item: ItemUnits): number {
   if (unit === item.baseUnit) return roundHalfUp(qty, 3);
   const factor = item.conversions?.[unit] ?? STANDARD[item.baseUnit]?.[unit];
-  if (factor === undefined) throw new Error(`${unit} ko ${item.baseUnit} mein badalne ka niyam set nahi hai`);
+  if (factor === undefined) throw new Error(`No conversion set from ${unit} to ${item.baseUnit}`);
   return roundHalfUp(qty * factor, 3);
 }

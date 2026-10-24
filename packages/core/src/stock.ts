@@ -33,7 +33,7 @@ const fromMilli = (m: number) => m / 1000;
 
 function signedMilli(m: StockMove): { inward: number; uses: number; adjust: number } {
   const q = toMilli(m.qty);
-  if (m.type !== "ADJUST" && q < 0) throw new Error(`Movement ${m.id}: qty negative nahi ho sakti`);
+  if (m.type !== "ADJUST" && q < 0) throw new Error(`Movement ${m.id}: quantity cannot be negative`);
   switch (m.type) {
     case "IN":
     case "TRANSFER_IN":

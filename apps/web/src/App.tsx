@@ -16,7 +16,7 @@ import { Users } from "./pages/Users";
 
 function Gate() {
   const s = useAuth();
-  if (s.status === "loading") return <div className="login-wrap muted">Load ho raha hai…</div>;
+  if (s.status === "loading") return <div className="login-wrap muted">Loading…</div>;
   if (s.status === "signedOut") return <Login />;
   if (s.status === "noAccess") return <NoAccess email={s.email} />;
   return (
@@ -29,17 +29,17 @@ function Gate() {
           <Route path="users" element={<Users />} />
           <Route path="history" element={<EditHistory />} />
           <Route path="inventory" element={<Inventory />} />
-          <Route path="store" element={<Soon title="Store / Saman Register" phase="Phase 2" what="Auzaar aur saman — aaya, thekedar ko diya, wapas" />} />
+          <Route path="store" element={<Soon title="Store Register" phase="Phase 2" what="Tools and materials — received, issued to contractors, returned" />} />
           <Route path="machinery" element={<Machinery />} />
-          <Route path="attendance" element={<Soon title="Attendance" phase="Phase 2" what="Staff KYC + khata, thekedar muster (Mistri / Kuli / Reja)" />} />
-          <Route path="work" element={<Soon title="Daily Work" phase="Phase 2" what="Concrete M³, shuttering Sq M, steel Kg, photo" />} />
-          <Route path="creditors" element={<Soon title="Creditors / Party Ledger" phase="Phase 2" what="Bill, bhugtan, bakaya" />} />
-          <Route path="reports" element={<Soon title="Reports (DPR)" phase="Phase 3" what="Roz ki DPR — lock, version, PDF, WhatsApp, Obsidian" />} />
-          <Route path="ai" element={<Soon title="AI Insights" phase="Phase 4" what="Asli data se sawaal-jawab" />} />
-          <Route path="help" element={<Soon title="Help Center" phase="Phase 4" what="Calculator, SOP, emergency number" />} />
+          <Route path="attendance" element={<Soon title="Attendance" phase="Phase 2" what="Staff KYC + ledger, contractor muster (Mistri / Kuli / Reja)" />} />
+          <Route path="work" element={<Soon title="Daily Work" phase="Phase 2" what="Concrete M³, shuttering Sq M, steel Kg, photos" />} />
+          <Route path="creditors" element={<Soon title="Creditors / Party Ledger" phase="Phase 2" what="Bills, payments, outstanding" />} />
+          <Route path="reports" element={<Soon title="Reports (DPR)" phase="Phase 3" what="Daily DPR — lock, versions, PDF, WhatsApp, Obsidian" />} />
+          <Route path="ai" element={<Soon title="AI Insights" phase="Phase 4" what="Questions answered from real site data" />} />
+          <Route path="help" element={<Soon title="Help Center" phase="Phase 4" what="Calculators, SOPs, emergency contacts" />} />
           <Route path="bin" element={<RecycleBin />} />
           <Route path="settings" element={<Settings />} />
-          <Route path="*" element={<Soon title="Page nahi mila" phase="—" what="Yeh link galat hai" />} />
+          <Route path="*" element={<Soon title="Page not found" phase="—" what="This link is not valid" />} />
         </Route>
       </Routes>
     </ProjectProvider>

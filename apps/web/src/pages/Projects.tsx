@@ -13,14 +13,14 @@ export function Projects() {
 
   return (
     <>
-      <PageHead title="Site Projects & Locations" sub="Sab site, jagah, client, timeline aur budget">
+      <PageHead title="Site Projects & Locations" sub="All sites — location, client, timeline and budget">
         {profile.isAdmin && (
           <button className="btn primary" onClick={() => setEditing("new")}>
-            ＋ Naya project
+            ＋ New project
           </button>
         )}
       </PageHead>
-      {projects.length === 0 && <div className="card empty">Abhi koi project nahi.</div>}
+      {projects.length === 0 && <div className="card empty">No projects yet.</div>}
       <div className="mods" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
         {projects.map((p) => (
           <button
@@ -38,7 +38,7 @@ export function Projects() {
               {p.startDate ? formatDate(p.startDate) : "—"} → {p.endDate ? formatDate(p.endDate) : "—"}
             </span>
             <span className="small">Budget: {p.budgetPaise ? formatINR(p.budgetPaise) : "—"}</span>
-            {p.id === current?.id && <span className="pill info">Abhi chuna hua</span>}
+            {p.id === current?.id && <span className="pill info">Selected</span>}
           </button>
         ))}
       </div>
@@ -51,7 +51,7 @@ export function Projects() {
             </div>
             {profile.isAdmin && (
               <button className="btn sm" onClick={() => setEditing(current)}>
-                ✎ Badlo
+                ✎ Edit
               </button>
             )}
           </div>
@@ -70,7 +70,7 @@ export function Projects() {
                 ))}
               </tbody>
             </table>
-            {!current.zones?.length && <div className="empty">Koi zone nahi joda</div>}
+            {!current.zones?.length && <div className="empty">No zones added</div>}
           </div>
         </section>
       )}
@@ -126,7 +126,7 @@ function ProjectForm({ row, onClose }: { row: Project | null; onClose: () => voi
         row ? "UPDATE" : "CREATE",
         row ? reason.trim() : null,
       );
-      toast(row ? "Project badal diya ✓" : "Project jud gaya ✓");
+      toast(row ? "Project updated ✓" : "Project added ✓");
       onClose();
     } catch (err) {
       toast(errorText(err), true);
@@ -136,28 +136,28 @@ function ProjectForm({ row, onClose }: { row: Project | null; onClose: () => voi
   };
 
   return (
-    <Dialog title={row ? "Project badlo" : "Naya project"} onClose={onClose}>
+    <Dialog title={row ? "Edit project" : "New project"} onClose={onClose}>
       <form className="form" onSubmit={save}>
         <div className="grid-form">
           <div className="field">
-            <label htmlFor="p-id">Chhota code (ID) *</label>
+            <label htmlFor="p-id">Short code (ID) *</label>
             <input id="p-id" className="input" value={v.id} onChange={(e) => setV({ ...v, id: e.target.value.toUpperCase() })} disabled={!!row} placeholder="KSK" />
-            <span className={idOk || !v.id ? "hint" : "err"}>2–6 English capital akshar; baad mein nahi badlega</span>
+            <span className={idOk || !v.id ? "hint" : "err"}>2–6 capital letters; cannot be changed later</span>
           </div>
           <div className="field">
             <label htmlFor="p-code">Project code *</label>
             <input id="p-code" className="input" value={v.code} onChange={set("code")} placeholder="BPMC-KSK" />
           </div>
           <div className="field">
-            <label htmlFor="p-name">Naam *</label>
+            <label htmlFor="p-name">Name *</label>
             <input id="p-name" className="input" value={v.name} onChange={set("name")} placeholder="EMRS Keshkal" />
           </div>
           <div className="field">
-            <label htmlFor="p-place">Jagah</label>
+            <label htmlFor="p-place">Location</label>
             <input id="p-place" className="input" value={v.place} onChange={set("place")} />
           </div>
           <div className="field">
-            <label htmlFor="p-client">Client / Vibhag</label>
+            <label htmlFor="p-client">Client / Department</label>
             <input id="p-client" className="input" value={v.client} onChange={set("client")} />
           </div>
           <div className="field">
@@ -165,35 +165,35 @@ function ProjectForm({ row, onClose }: { row: Project | null; onClose: () => voi
             <input id="p-budget" className="input" inputMode="decimal" value={v.budget} onChange={set("budget")} />
           </div>
           <div className="field">
-            <label htmlFor="p-start">Shuru</label>
+            <label htmlFor="p-start">Start date</label>
             <input id="p-start" type="date" className="input" value={v.startDate} onChange={set("startDate")} />
           </div>
           <div className="field">
-            <label htmlFor="p-end">Khatam (tender ke hisab)</label>
+            <label htmlFor="p-end">End date (as per tender)</label>
             <input id="p-end" type="date" className="input" value={v.endDate} onChange={set("endDate")} />
           </div>
         </div>
         <div className="field">
-          <label htmlFor="p-zones">Zone / Sector (har line mein ek)</label>
+          <label htmlFor="p-zones">Zones / Sectors (one per line)</label>
           <textarea id="p-zones" className="input" rows={4} value={v.zones} onChange={set("zones")} />
         </div>
         <div className="field">
           <label htmlFor="p-vault">Obsidian vault folder</label>
           <input id="p-vault" className="input" value={v.vault} onChange={set("vault")} placeholder="EMRS KESHKAL" />
-          <span className="hint">G:\My Drive\AI obsidian ke andar ka folder</span>
+          <span className="hint">Folder inside G:\My Drive\AI obsidian</span>
         </div>
         {row && (
           <div className="field">
-            <label htmlFor="p-reason">Badalne ka kaaran *</label>
+            <label htmlFor="p-reason">Reason for change *</label>
             <input id="p-reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)} />
           </div>
         )}
         <div className="actions">
           <button type="button" className="btn" onClick={onClose}>
-            Radd
+            Cancel
           </button>
           <button className="btn primary" disabled={!valid || busy}>
-            Save karo
+            Save
           </button>
         </div>
       </form>

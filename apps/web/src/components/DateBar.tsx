@@ -1,12 +1,12 @@
 import { addDays, canEditDate, editWindowClosesAt, formatDate, toBusinessDateIST } from "@bpmc/core";
 
-/** Har section ke upar: din chuno (‹ ›), aur din khula hai ya lock — design v2 jaisa */
+/** Top of every section: pick a day (‹ ›) and see whether it is open or locked — design v2 */
 export function DateBar({ title, sub, date, onChange, pending, unlockedTill }: {
   title: string;
   sub: string;
   date: string;
   onChange: (d: string) => void;
-  /** Kitni entry server ke hisab ka intezaar kar rahi hain */
+  /** How many entries are waiting for the server calculation */
   pending?: number;
   unlockedTill?: Date | null;
 }) {
@@ -19,31 +19,31 @@ export function DateBar({ title, sub, date, onChange, pending, unlockedTill }: {
         {date === today ? (
           <span className="pill ok">
             <span className="dot" />
-            AAJ
+            TODAY
           </span>
         ) : (
           <span className="pill neutral">{formatDate(date)}</span>
         )}
         <b>{title}</b>
         {open ? (
-          <span className="pill info">Entry khuli — {new Date(closes.getTime() - 1000).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })} tak</span>
+          <span className="pill info">Open for entry until {new Date(closes.getTime() - 1000).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
         ) : (
-          <span className="pill warn">🔒 Din lock — sirf Admin khol sakta hai</span>
+          <span className="pill warn">🔒 Day locked — only Admin can reopen</span>
         )}
-        {!!pending && <span className="pill warn">⏳ {pending} entry ka hisab ho raha (5 min tak)</span>}
+        {!!pending && <span className="pill warn">⏳ Calculating {pending} {pending === 1 ? "entry" : "entries"} (up to 5 min)</span>}
       </div>
       <p className="small muted">{sub}</p>
       <div className="actions">
-        <button className="btn sm" onClick={() => onChange(addDays(date, -1))} aria-label="Pichhla din">
+        <button className="btn sm" onClick={() => onChange(addDays(date, -1))} aria-label="Previous day">
           ‹
         </button>
-        <input className="input" style={{ width: "auto", minHeight: 38 }} type="date" value={date} max={today} onChange={(e) => e.target.value && onChange(e.target.value)} aria-label="Tarikh" />
-        <button className="btn sm" onClick={() => onChange(addDays(date, 1))} disabled={date >= today} aria-label="Agla din">
+        <input className="input" style={{ width: "auto", minHeight: 38 }} type="date" value={date} max={today} onChange={(e) => e.target.value && onChange(e.target.value)} aria-label="Date" />
+        <button className="btn sm" onClick={() => onChange(addDays(date, 1))} disabled={date >= today} aria-label="Next day">
           ›
         </button>
         {date !== today && (
           <button className="btn sm" onClick={() => onChange(today)}>
-            Aaj
+            Today
           </button>
         )}
       </div>

@@ -227,7 +227,7 @@ function hisabUdhaar_(parent, pid, pending) {
     if (!isUdhaar) {
       if (existing && !existing.data.deleted) {
         writes.push({
-          update: { name: fullName_(path), fields: encFields_({ deleted: { by: 'server', reason: m.deleted ? 'Stock entry hata di gayi' : 'Ab udhaar nahi', at: now }, rev: (existing.data.rev || 1) + 1, updatedAt: now, updatedBy: 'server' }) },
+          update: { name: fullName_(path), fields: encFields_({ deleted: { by: 'server', reason: m.deleted ? 'Stock entry was deleted' : 'No longer on credit', at: now }, rev: (existing.data.rev || 1) + 1, updatedAt: now, updatedBy: 'server' }) },
           updateMask: { fieldPaths: ['deleted', 'rev', 'updatedAt', 'updatedBy'] },
         });
       }
@@ -241,7 +241,7 @@ function hisabUdhaar_(parent, pid, pending) {
           projectId: pid, businessDate: m.businessDate, type: 'BILL', partyId: m.partyId, partyName: m.partyName || null,
           amountPaise: amt.totalPaise, basePaise: amt.basePaise, gstPaise: amt.gstPaise,
           billNo: m.billNo || null, itemName: m.itemName || m.itemId, qty: m.qty, source: 'stockMoves/' + d.id,
-          remark: m.ratePaise ? null : 'Rate nahi likha — rakam 0, stock entry mein rate bharo',
+          remark: m.ratePaise ? null : 'No rate entered — amount is 0; add the rate in the stock entry',
           deleted: null, serverStatus: 'DONE', createdBy: existing ? existing.data.createdBy : 'server', createdAt: existing ? existing.data.createdAt : now,
           updatedBy: 'server', updatedAt: now, rev: existing ? (existing.data.rev || 1) + 1 : 1, lastAuditId: null,
         }),
@@ -363,7 +363,7 @@ function installTriggers() {
   });
   ScriptApp.newTrigger('runHisab').timeBased().everyMinutes(5).create();
   ScriptApp.newTrigger('dailyBackup').timeBased().everyDays(1).atHour(23).nearMinute(30).inTimezone('Asia/Kolkata').create();
-  Logger.log('runHisab har 5 minute chalega; dailyBackup roz raat ~11:30 IST');
+  Logger.log('runHisab runs every 5 minutes; dailyBackup nightly at ~11:30 PM IST');
 }
 
 // ---------------- roz ka backup → Obsidian vault (Google Drive) ----------------
@@ -378,7 +378,7 @@ var GLOBAL_COLLECTIONS = ['users', 'roles', 'settings', 'projects', 'masters_mat
 
 function obsidianRoot_() {
   var it = DriveApp.getRootFolder().getFoldersByName(OBSIDIAN_ROOT);
-  if (!it.hasNext()) throw new Error('My Drive mein "' + OBSIDIAN_ROOT + '" folder nahi mila');
+  if (!it.hasNext()) throw new Error('Folder "' + OBSIDIAN_ROOT + '" not found in My Drive');
   return it.next();
 }
 /** "kondagaon site/kondagaon pawada anicut" jaisa raasta — jo folder nahi hai sirf wahi banata hai */
@@ -395,7 +395,7 @@ function createNewFile_(folder, baseName, ext, content, mime) {
   var file = folder.createFile(name, content, mime);
   // Likhne ke baad padh ke jaancho — khaali / toota file nahi chahiye
   var back = file.getBlob().getDataAsString();
-  if (!back || back.length < 20) throw new Error(name + ' khaali bana');
+  if (!back || back.length < 20) throw new Error(name + ' was written empty');
   if (ext === '.json') JSON.parse(back);
   return file;
 }
@@ -410,7 +410,7 @@ function plain_(doc) {
 function dailyBackup(reason) {
   var started = new Date();
   var date = BPMCCore.toBusinessDateIST(started);
-  var why = typeof reason === 'string' ? reason : 'roz ka backup';
+  var why = typeof reason === 'string' ? reason : 'nightly backup';
   var root = obsidianRoot_();
   var global = {};
   GLOBAL_COLLECTIONS.forEach(function (c) { global[c] = listDocs_(c).map(plain_); });
@@ -433,7 +433,7 @@ function dailyBackup(reason) {
       takenAt: started.toISOString(),
       reason: why,
       counts: Object.keys(cols).reduce(function (o, c) { o[c] = cols[c].length; return o; }, {}),
-      note: entries === 0 ? 'Is project mein abhi koi entry nahi — sirf project aur master list ka backup' : null,
+      note: entries === 0 ? 'No entries in this project yet — backup contains the project and master data only' : null,
       collections: cols,
       global: global,
     };
@@ -449,7 +449,7 @@ function dailyBackup(reason) {
       fields: encFields_({ at: started, businessDate: date, reason: why, ms: new Date() - started, projects: results, ok: true }),
     },
   }]);
-  Logger.log('Backup ho gaya: ' + JSON.stringify(results));
+  Logger.log('Backup complete: ' + JSON.stringify(results));
   return results;
 }
 
@@ -505,8 +505,8 @@ function bootstrapPhase1() {
       };
     }));
   }
-  Logger.log('Naye bane (' + created.length + '): ' + created.join(', '));
-  Logger.log('Pehle se the (chhue nahi): ' + paths.filter(function (p) { return created.indexOf(p) < 0; }).join(', '));
+  Logger.log('Created (' + created.length + '): ' + created.join(', '));
+  Logger.log('Already existed (left untouched): ' + paths.filter(function (p) { return created.indexOf(p) < 0; }).join(', '));
 }
 
 // ---------------- restore (kisi din ka data wapas) ----------------
@@ -524,14 +524,14 @@ function restoreInput_() {
   var props = PropertiesService.getScriptProperties();
   var pid = props.getProperty('RESTORE_PROJECT');
   var fileName = props.getProperty('RESTORE_FILE');
-  if (!pid || !fileName) throw new Error('Script properties RESTORE_PROJECT aur RESTORE_FILE set karo');
+  if (!pid || !fileName) throw new Error('Set Script properties RESTORE_PROJECT and RESTORE_FILE');
   var p = getDoc_('projects/' + pid);
-  if (!p) throw new Error('Project ' + pid + ' nahi mila');
+  if (!p) throw new Error('Project ' + pid + ' not found');
   var folder = folderPath_(obsidianRoot_(), (p.data.vault || p.data.name) + '/Backup');
   var it = folder.getFilesByName(fileName);
-  if (!it.hasNext()) throw new Error('Backup file nahi mili: ' + fileName);
+  if (!it.hasNext()) throw new Error('Backup file not found: ' + fileName);
   var backup = JSON.parse(it.next().getBlob().getDataAsString());
-  if (backup.type !== 'bpmc-full-backup' || backup.project.id !== pid) throw new Error('Yeh file is project ka backup nahi hai');
+  if (backup.type !== 'bpmc-full-backup' || backup.project.id !== pid) throw new Error('This file is not a backup of this project');
   return { pid: pid, fileName: fileName, backup: backup, props: props };
 }
 
@@ -573,20 +573,20 @@ function restorePreview() {
   var input = restoreInput_();
   var plan = restorePlan_(input);
   Logger.log('Restore preview — ' + input.pid + ' ← ' + input.fileName + ' (backup: ' + input.backup.takenAt + ')');
-  Logger.log('Backup wali value wapas: ' + plan.put.length + ' · backup ke baad bani → Recycle Bin: ' + plan.softDelete.length + ' · same: ' + plan.same);
+  Logger.log('Restored from backup: ' + plan.put.length + ' · created after backup → Recycle Bin: ' + plan.softDelete.length + ' · unchanged: ' + plan.same);
   Logger.log(JSON.stringify(plan.perCol));
-  Logger.log('Theek lage to Script property RESTORE_CONFIRM = ' + input.pid + '/' + input.fileName + ' set karke restoreRun chalao.');
+  Logger.log('If this looks right, set Script property RESTORE_CONFIRM = ' + input.pid + '/' + input.fileName + ' and run restoreRun.');
 }
 
 function restoreRun() {
   var input = restoreInput_();
   var want = input.pid + '/' + input.fileName;
-  if (input.props.getProperty('RESTORE_CONFIRM') !== want) throw new Error('Pehle restorePreview dekho, phir RESTORE_CONFIRM = ' + want);
-  dailyBackup('restore se pehle (' + want + ')');
+  if (input.props.getProperty('RESTORE_CONFIRM') !== want) throw new Error('Run restorePreview first, then set RESTORE_CONFIRM = ' + want);
+  dailyBackup('before restore (' + want + ')');
   var plan = restorePlan_(input);
   var now = new Date();
   var who = Session.getActiveUser().getEmail() || 'server-restore';
-  var reason = 'Backup ' + input.fileName + ' se wapas (' + who + ')';
+  var reason = 'Restored from backup ' + input.fileName + ' (' + who + ')';
   var writes = [];
   function audit(col, id, rev) {
     var aid = 'restore-' + Utilities.getUuid();
@@ -612,7 +612,7 @@ function restoreRun() {
   });
   commit_(writes);
   input.props.deleteProperty('RESTORE_CONFIRM');
-  Logger.log('Restore ho gaya: ' + plan.put.length + ' wapas, ' + plan.softDelete.length + ' Recycle Bin mein. Hisab agle runHisab mein dobara banega.');
+  Logger.log('Restore complete: ' + plan.put.length + ' restored, ' + plan.softDelete.length + ' moved to Recycle Bin. Totals will be recalculated on the next runHisab.');
 }
 
 // ---------------- migration ----------------
@@ -624,7 +624,7 @@ function migrationInput_() {
   var props = PropertiesService.getScriptProperties();
   var id = props.getProperty('MIGRATION_ID');
   var m = MIGRATIONS.filter(function (x) { return x.id === id; })[0];
-  if (!m) throw new Error('MIGRATION_ID "' + id + '" MIGRATIONS list mein nahi hai');
+  if (!m) throw new Error('MIGRATION_ID "' + id + '" is not in the MIGRATIONS list');
   var docs = [];
   m.collections.forEach(function (c) {
     if (c.indexOf('projects/*/') === 0) {
@@ -642,18 +642,18 @@ function migrationPreview() {
   var x = migrationInput_();
   var plan = BPMCCore.planMigration(x.m, x.docs);
   Logger.log(x.m.id + ' — ' + x.m.describe);
-  Logger.log('Dekhe: ' + plan.scanned + ' · badlenge: ' + plan.changes.length + ' · pehle se naye: ' + plan.alreadyDone + ' · galti: ' + plan.errors.length);
+  Logger.log('Scanned: ' + plan.scanned + ' · will change: ' + plan.changes.length + ' · already migrated: ' + plan.alreadyDone + ' · errors: ' + plan.errors.length);
   plan.changes.slice(0, 5).forEach(function (c) { Logger.log(c.path + ': ' + JSON.stringify(c.before) + ' → ' + JSON.stringify(c.after)); });
-  plan.errors.forEach(function (e) { Logger.log('GALTI ' + e.path + ': ' + e.error); });
+  plan.errors.forEach(function (e) { Logger.log('ERROR ' + e.path + ': ' + e.error); });
 }
 
 function migrationRun() {
   var x = migrationInput_();
-  if (x.props.getProperty('MIGRATION_CONFIRM') !== x.m.id) throw new Error('Pehle migrationPreview dekho, phir MIGRATION_CONFIRM = ' + x.m.id);
-  if (getDoc_('migrations/' + x.m.id)) throw new Error(x.m.id + ' pehle hi chal chuka hai');
+  if (x.props.getProperty('MIGRATION_CONFIRM') !== x.m.id) throw new Error('Run migrationPreview first, then set MIGRATION_CONFIRM = ' + x.m.id);
+  if (getDoc_('migrations/' + x.m.id)) throw new Error(x.m.id + ' has already been run');
   var plan = BPMCCore.planMigration(x.m, x.docs);
-  if (plan.errors.length) throw new Error(plan.errors.length + ' document mein galti — migration nahi chalega. migrationPreview dekho.');
-  dailyBackup('migration ' + x.m.id + ' se pehle');
+  if (plan.errors.length) throw new Error(plan.errors.length + ' documents have errors — migration will not run. See migrationPreview.');
+  dailyBackup('before migration ' + x.m.id);
   var times = {};
   x.docs.forEach(function (d) { times[d.path] = d.updateTime; });
   commit_(plan.changes.map(function (c) {
@@ -663,12 +663,12 @@ function migrationRun() {
   var check = BPMCCore.verifyMigration(plan, after);
   commit_([{ update: { name: fullName_('migrations/' + x.m.id), fields: encFields_({ at: new Date(), describe: x.m.describe, scanned: plan.scanned, changed: plan.changes.length, ok: check.ok, problems: check.problems }) } }]);
   x.props.deleteProperty('MIGRATION_CONFIRM');
-  if (!check.ok) throw new Error('Migration ke baad jaanch fail: ' + check.problems.join('; ') + ' — backup Obsidian vault mein hai, restore karo');
-  Logger.log('Migration ' + x.m.id + ' ho gaya aur jaanch pass: ' + plan.changes.length + ' badle');
+  if (!check.ok) throw new Error('Post-migration check failed: ' + check.problems.join('; ') + ' — a backup is in the Obsidian vault; restore it');
+  Logger.log('Migration ' + x.m.id + ' complete and verified: ' + plan.changes.length + ' changed');
 }
 
 /** Phase 0 ka connection check — ab bhi kaam ka */
 function phase0Ping() {
   var r = fsCall_('get', '/_health/ping');
-  Logger.log('Firestore pahunch: ' + (r === null ? 'theek (document nahi hai, 404)' : 'theek'));
+  Logger.log('Firestore reachable: ' + (r === null ? 'OK (document absent, 404)' : 'OK'));
 }

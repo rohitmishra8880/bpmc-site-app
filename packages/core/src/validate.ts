@@ -7,7 +7,7 @@ export function gstinCheckChar(first14: string): string {
   let sum = 0;
   for (let i = 0; i < 14; i++) {
     const v = GST_CHARS.indexOf(first14[i]!);
-    if (v < 0) throw new Error("GSTIN mein galat akshar");
+    if (v < 0) throw new Error("GSTIN has an invalid character");
     const p = v * (i % 2 === 0 ? 1 : 2);
     sum += Math.floor(p / 36) + (p % 36);
   }
@@ -26,15 +26,15 @@ export interface GstinCheck {
 export function checkGstin(raw: string): GstinCheck {
   const g = raw.trim().toUpperCase();
   if (!/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(g)) {
-    return { ok: false, error: "GSTIN 15 akshar ka hota hai, jaise 22AAACA1122D1Z4" };
+    return { ok: false, error: "GSTIN must be 15 characters, e.g. 22AAACA1122D1Z4" };
   }
   if (gstinCheckChar(g.slice(0, 14)) !== g[14]) {
-    return { ok: false, stateCode: g.slice(0, 2), error: "GSTIN ka aakhri akshar mel nahi kha raha — number dobara dekho" };
+    return { ok: false, stateCode: g.slice(0, 2), error: "GSTIN check digit does not match — please re-check the number" };
   }
   const stateCode = g.slice(0, 2);
   return stateCode === "22"
     ? { ok: true, stateCode }
-    : { ok: true, stateCode, warning: `Yeh party Chhattisgarh (22) ki nahi, state code ${stateCode} hai` };
+    : { ok: true, stateCode, warning: `Party is not from Chhattisgarh (22) — state code ${stateCode}` };
 }
 
 /** 10 ank ka Indian mobile (6–9 se shuru). +91 / 0 aage ho to hata do. */

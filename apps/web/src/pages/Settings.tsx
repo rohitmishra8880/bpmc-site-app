@@ -36,29 +36,29 @@ export function Settings() {
     };
   }, [toast]);
 
-  if (!profile.isAdmin) return <div className="card empty">Yeh page sirf Admin ke liye hai.</div>;
+  if (!profile.isAdmin) return <div className="card empty">This page is for the Admin only.</div>;
   const r = g?.rental;
   const last = runs[0];
   const hoursSince = last ? (Date.now() - last.at.toDate().getTime()) / 36e5 : null;
 
   return (
     <>
-      <PageHead title="Settings & Backup" sub="Niyam aur backup — sirf Admin" />
+      <PageHead title="Settings & Backup" sub="Rules and backups — Admin only" />
       <div className="stats">
         <div className="card stat">
-          <span className="lab">Rental niyam</span>
+          <span className="lab">Rental rules</span>
           <span className="foot">Half day = Rate × {r?.halfDayFactor ?? "—"}</span>
           <span className="foot">Breakdown / Absent = Rate × {r?.idleDayFactor ?? "—"}</span>
-          <span className="foot">Monthly din-rate = Rate ÷ {r?.monthDivisor ?? "—"}</span>
-          <span className="foot">Shift = {r?.shiftHours ?? "—"} ghante</span>
+          <span className="foot">Monthly day-rate = Rate ÷ {r?.monthDivisor ?? "—"}</span>
+          <span className="foot">Shift = {r?.shiftHours ?? "—"} hours</span>
         </div>
         <div className="card stat">
-          <span className="lab">Edit niyam</span>
+          <span className="lab">Edit window</span>
           <span className="num">
             {g?.editWindowDays ?? "—"}
-            <small>din</small>
+            <small>days</small>
           </span>
-          <span className="foot">Uske baad din lock; sirf Admin khole</span>
+          <span className="foot">After that the day locks; only Admin can reopen</span>
         </div>
         <div className="card stat">
           <span className="lab">Company</span>
@@ -68,24 +68,24 @@ export function Settings() {
           </span>
         </div>
         <div className="card stat" style={hoursSince !== null && hoursSince > 48 ? { borderColor: "var(--crit)" } : undefined}>
-          <span className="lab">Aakhri backup</span>
+          <span className="lab">Last backup</span>
           <span className="num" style={{ fontSize: 22 }}>
-            {last ? last.at.toDate().toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "Abhi nahi"}
+            {last ? last.at.toDate().toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "Not yet"}
           </span>
-          <span className="foot">{hoursSince !== null && hoursSince > 48 ? "2 din se backup nahi hua!" : "Roz raat ~11:30 IST, Obsidian vault mein"}</span>
+          <span className="foot">{hoursSince !== null && hoursSince > 48 ? "No backup for 2 days!" : "Nightly ~11:30 PM IST, to the Obsidian vault"}</span>
         </div>
       </div>
       <section className="card">
         <div className="card-head">
-          <h2>Backup ka record</h2>
+          <h2>Backup history</h2>
           <span className="small muted">G:\My Drive\AI obsidian\&lt;vault&gt;\Backup\</span>
         </div>
         <div className="tbl-wrap">
           <table>
             <thead>
               <tr>
-                <th>Kab</th>
-                <th>Kyun</th>
+                <th>When</th>
+                <th>Reason</th>
                 <th>Project → file</th>
               </tr>
             </thead>
@@ -97,7 +97,7 @@ export function Settings() {
                   <td className="wrap small">
                     {Object.entries(b.projects ?? {}).map(([pid, x]) => (
                       <div key={pid}>
-                        <b>{pid}</b>: {x.file} · {(x.bytes / 1024).toFixed(1)} KB · {x.entries} entry
+                        <b>{pid}</b>: {x.file} · {(x.bytes / 1024).toFixed(1)} KB · {x.entries} entries
                       </div>
                     ))}
                   </td>
@@ -105,9 +105,9 @@ export function Settings() {
               ))}
             </tbody>
           </table>
-          {runs.length === 0 && <div className="empty">Abhi koi backup nahi hua</div>}
+          {runs.length === 0 && <div className="empty">No backups yet</div>}
         </div>
-        <p className="note">Turant backup chahiye to Apps Script mein <b>dailyBackup</b> chalao. Restore (kisi din ka data wapas) agle hisse mein — pehle preview, phir OK.</p>
+        <p className="note">For an immediate backup, run <b>dailyBackup</b> in Apps Script. Restore is done with <b>restorePreview</b> → <b>restoreRun</b> (preview first, then confirm).</p>
       </section>
     </>
   );

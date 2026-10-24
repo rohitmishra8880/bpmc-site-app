@@ -42,7 +42,7 @@ export function planMigration(m: Migration, docs: MigrationDoc[]): MigrationPlan
     try {
       const after = { ...m.migrate(clone(d.data)), schemaVersion: m.toVersion };
       const lost = Object.keys(d.data).filter((k) => !(k in after) && !(m.dropKeys && k in m.dropKeys));
-      if (lost.length) throw new Error(`Yeh field gaayab ho rahe the: ${lost.join(", ")}`);
+      if (lost.length) throw new Error(`These fields would be lost: ${lost.join(", ")}`);
       plan.changes.push({ path: d.path, before: d.data, after });
     } catch (e) {
       plan.errors.push({ path: d.path, error: (e as Error).message });
@@ -54,16 +54,16 @@ export function planMigration(m: Migration, docs: MigrationDoc[]): MigrationPlan
 /** Migration ke baad dobara padha data plan se milao — gin-ti aur har badla document. */
 export function verifyMigration(plan: MigrationPlan, afterDocs: MigrationDoc[]): { ok: boolean; problems: string[] } {
   const problems: string[] = [];
-  if (afterDocs.length !== plan.scanned) problems.push(`Gin-ti badal gayi: pehle ${plan.scanned}, ab ${afterDocs.length}`);
+  if (afterDocs.length !== plan.scanned) problems.push(`Document count changed: before ${plan.scanned}, now ${afterDocs.length}`);
   const byPath = new Map(afterDocs.map((d) => [d.path, d.data]));
   for (const c of plan.changes) {
     const now = byPath.get(c.path);
     if (!now) {
-      problems.push(`${c.path} gaayab`);
+      problems.push(`${c.path} missing`);
       continue;
     }
     for (const [k, v] of Object.entries(c.after)) {
-      if (JSON.stringify(now[k]) !== JSON.stringify(v)) problems.push(`${c.path}.${k} ummeed ke mutabik nahi`);
+      if (JSON.stringify(now[k]) !== JSON.stringify(v)) problems.push(`${c.path}.${k} does not match expected value`);
     }
   }
   return { ok: problems.length === 0, problems };

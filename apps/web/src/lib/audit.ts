@@ -54,7 +54,7 @@ export async function unlockDay(pid: string, date: string, expiresAt: Date, emai
     rev: 1,
     by: email,
     at: serverTimestamp(),
-    reason: `Din khola ${expiresAt.toLocaleString("en-IN")} tak — ${reason}`,
+    reason: `Day reopened until ${expiresAt.toLocaleString("en-IN")} — ${reason}`,
     device: deviceLabel(),
   });
   await batch.commit();

@@ -12,16 +12,16 @@ import { Dialog, errorText, PageHead, ReasonDialog, useToast } from "../lib/ui";
 const STATUS: [RunStatus, string, string][] = [
   ["FULL", "Full", "ok"],
   ["HALF", "Half", "warn"],
-  ["HOUR", "Ghante", "warn"],
+  ["HOUR", "Hours", "warn"],
   ["BREAKDOWN", "Breakdown", "crit"],
   ["ABSENT", "Absent", "neutral"],
 ];
-const RATE_TYPE: Record<string, string> = { DAY: "/din", MONTH: "/mahina", HOUR: "/ghanta" };
+const RATE_TYPE: Record<string, string> = { DAY: "/day", MONTH: "/month", HOUR: "/hour" };
 const DEDUCTION: [string, string][] = [
-  ["OWNER_ADVANCE", "Owner ko advance"],
-  ["DRIVER_ADVANCE", "Driver ko advance"],
-  ["SITE_MATERIAL", "Site se saman (repair)"],
-  ["SITE_DIESEL", "Site ka diesel / oil"],
+  ["OWNER_ADVANCE", "Advance to owner"],
+  ["DRIVER_ADVANCE", "Advance to driver"],
+  ["SITE_MATERIAL", "Site material (repairs)"],
+  ["SITE_DIESEL", "Site diesel / oil"],
 ];
 const DIESEL_ID = "diesel";
 /** Machine log ka diesel wala stock movement — log ki id se juda */
@@ -58,7 +58,7 @@ export function Machinery() {
   const breakdowns = [...logBy.values()].filter((l) => l.status === "BREAKDOWN");
   const liveDeds = (deds ?? []).filter((d) => !d.deleted);
 
-  if (!current) return <div className="card empty">Pehle project chuno.</div>;
+  if (!current) return <div className="card empty">Select a project first.</div>;
 
   const removeIt = async (col: "machineLogs" | "machineDeductions", e: Entry, reason: string) => {
     try {
@@ -68,7 +68,7 @@ export function Machinery() {
         if (mv) writes.push(softDeleteWrite("stockMoves", mv, profile.email, reason));
       }
       await writeEntries(current.id, profile.email, writes, reason);
-      toast("Hata diya — Recycle Bin mein");
+      toast("Deleted — moved to Recycle Bin");
     } catch (err) {
       toast(errorText(err), true);
     }
@@ -76,44 +76,44 @@ export function Machinery() {
 
   return (
     <>
-      <DateBar title="Machine Log & Fuel" sub={`${current.name} — ghante, meter reading, diesel aur shift`} date={date} onChange={setDate} pending={pending} unlockedTill={unlock} />
-      <PageHead title="Machinery Tracking" sub="Har machine ka ek din mein ek log. Diesel yahin bharo — stock khud ghatega.">
+      <DateBar title="Machine Log & Fuel" sub={`${current.name} — running hours, meter readings, diesel and shifts`} date={date} onChange={setDate} pending={pending} unlockedTill={unlock} />
+      <PageHead title="Machinery Tracking" sub="One log per machine per day. Enter diesel here — stock is reduced automatically.">
         {open && (
           <button className="btn" onClick={() => setDedForm("new")}>
-            ＋ Advance / katauti
+            ＋ Advance / deduction
           </button>
         )}
       </PageHead>
       <div className="stats">
         <div className="card stat" style={breakdowns.length ? { borderColor: "var(--crit)" } : undefined}>
-          <span className="lab">Chalu machine</span>
+          <span className="lab">Machines running</span>
           <span className="num">
             {running}
             <small>/ {machines.length}</small>
           </span>
-          <span className="foot">{breakdowns.length ? `${breakdowns.length} breakdown` : `${logBy.size} ka log bhara`}</span>
+          <span className="foot">{breakdowns.length ? `${breakdowns.length} breakdown` : `${logBy.size} logged`}</span>
         </div>
         <div className="card stat">
-          <span className="lab">Machine ko diesel</span>
+          <span className="lab">Diesel to machines</span>
           <span className="num">
             {day?.machineTotals ? day.machineTotals.dieselLtr : "—"}
             <small>Ltr</small>
           </span>
-          <span className="foot">Wahi number Inventory mein</span>
+          <span className="foot">Same figure as in Inventory</span>
         </div>
         <div className="card stat">
-          <span className="lab">Kul ghante</span>
+          <span className="lab">Total running hours</span>
           <span className="num" style={{ fontSize: 28 }}>
             {day?.machineTotals ? formatHours(day.machineTotals.hours) : "—"}
           </span>
-          <span className="foot">Server ka hisab (CR − SR)</span>
+          <span className="foot">Calculated by server (CR − SR)</span>
         </div>
         <div className="card stat">
-          <span className="lab">Aaj ka rental</span>
+          <span className="lab">Today's rental</span>
           <span className="num" style={{ fontSize: 24 }}>
             {day?.machineTotals ? formatINR(day.machineTotals.amountPaise) : "—"}
           </span>
-          <span className="foot">Din / ghante wali machine; mahine wali bill mein</span>
+          <span className="foot">Day / hour-rate machines; monthly ones in the bill</span>
         </div>
       </div>
 
@@ -121,7 +121,7 @@ export function Machinery() {
         <div className="card-head">
           <div>
             <h2>Daily Machine Log</h2>
-            <p className="small muted">Machine par dabao → SR, CR, status, diesel bharo</p>
+            <p className="small muted">Tap a machine → enter SR, CR, status and diesel</p>
           </div>
         </div>
         <div className="tbl-wrap">
@@ -132,7 +132,7 @@ export function Machinery() {
                 <th>Party</th>
                 <th className="r">SR</th>
                 <th className="r">CR</th>
-                <th className="r">Ghante</th>
+                <th className="r">Hours</th>
                 <th className="r">Diesel</th>
                 <th className="r">Rate</th>
                 <th>Status</th>
@@ -165,9 +165,9 @@ export function Machinery() {
                       {m.ratePaise ? formatINR(m.ratePaise) : "—"}
                       <span className="small muted">{RATE_TYPE[m.rateType] ?? ""}</span>
                     </td>
-                    <td>{st ? <span className={`pill ${st[2]}`}>{st[1]}</span> : <span className="pill neutral">Log nahi</span>}</td>
+                    <td>{st ? <span className={`pill ${st[2]}`}>{st[1]}</span> : <span className="pill neutral">No log</span>}</td>
                     <td className="r">
-                      <b>{s ? (s.amountPaise === null ? (m.rateType === "MONTH" ? "Mahine mein" : "—") : formatINR(s.amountPaise)) : l ? "⏳" : "—"}</b>
+                      <b>{s ? (s.amountPaise === null ? (m.rateType === "MONTH" ? "In monthly bill" : "—") : formatINR(s.amountPaise)) : l ? "⏳" : "—"}</b>
                       {s?.warning && <span className="small" style={{ display: "block", color: "var(--warn)" }}>{s.warning}</span>}
                     </td>
                     <td className="wrap small">{l?.remark ?? ""}</td>
@@ -175,7 +175,7 @@ export function Machinery() {
                       <div className="actions">
                         {open && (
                           <button className={`btn sm ${l ? "" : "primary"}`} onClick={() => setEditing(m)}>
-                            {l ? "✎ Badlo" : "＋ Log"}
+                            {l ? "✎ Edit" : "＋ Log"}
                           </button>
                         )}
                         {open && l && (
@@ -190,9 +190,9 @@ export function Machinery() {
               })}
             </tbody>
           </table>
-          {machines.length === 0 && <div className="empty">Masters → Machine mein machine jodo (DG set bhi).</div>}
+          {machines.length === 0 && <div className="empty">Add machines under Masters → Machines (include the DG set).</div>}
         </div>
-        <p className="note">Ghante = CR − SR (2951.8 − 2944.0 = 7h 48m). Breakdown / Absent ka rental 0. Mahine wali machine ka hisab neeche bill mein.</p>
+        <p className="note">Hours = CR − SR (2951.8 − 2944.0 = 7h 48m). Breakdown / Absent rental is 0. Monthly-rate machines are settled in the bill below.</p>
       </section>
 
       <div className="mods" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", alignItems: "start" }}>
@@ -200,23 +200,23 @@ export function Machinery() {
           <div className="card-head">
             <h2 style={breakdowns.length ? { color: "var(--crit)" } : undefined}>Breakdown register</h2>
           </div>
-          {breakdowns.length === 0 && <div className="empty">Is din koi breakdown nahi</div>}
+          {breakdowns.length === 0 && <div className="empty">No breakdowns on this day</div>}
           {breakdowns.map((b) => (
             <div key={b.id} style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)" }}>
               <b>{machines.find((m) => m.id === b.machineId)?.name ?? b.machineId}</b>
               <span className="small muted">
                 {" "}
-                · {b.breakdownFrom ?? "?"} se {b.breakdownTo ? `${b.breakdownTo} tak` : "— abhi band"}
+                · from {b.breakdownFrom ?? "?"} {b.breakdownTo ? `to ${b.breakdownTo}` : "— still down"}
               </span>
-              <div className="small">{b.breakdownReason ?? "Kaaran nahi likha"}</div>
+              <div className="small">{b.breakdownReason ?? "No reason entered"}</div>
             </div>
           ))}
         </section>
         <section className="card">
           <div className="card-head">
-            <h2>Advance / katauti (aaj)</h2>
+            <h2>Advances / deductions (this day)</h2>
           </div>
-          {liveDeds.length === 0 && <div className="empty">Is din koi advance nahi</div>}
+          {liveDeds.length === 0 && <div className="empty">No advances on this day</div>}
           {liveDeds.map((d) => (
             <div key={d.id} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "12px 16px", borderBottom: "1px solid var(--line)" }}>
               <div>
@@ -249,7 +249,7 @@ export function Machinery() {
       {dedForm && <DeductionForm machines={machines} date={date} row={dedForm === "new" ? null : dedForm} onClose={() => setDedForm(null)} />}
       {removing && (
         <ReasonDialog
-          title={removing.col === "machineLogs" ? "Yeh machine log hatana hai? (diesel bhi stock mein wapas)" : "Yeh advance hatana hai?"}
+          title={removing.col === "machineLogs" ? "Delete this machine log? (its diesel returns to stock)" : "Delete this advance?"}
           onCancel={() => setRemoving(null)}
           onConfirm={(r) => {
             const x = removing;
@@ -296,7 +296,7 @@ function LogForm({ machine, date, log, moves, onClose }: { machine: MasterRow; d
   let preview: string | null = null;
   let readErr: string | null = null;
   if (srN != null && crN != null) {
-    if (!Number.isFinite(srN) || !Number.isFinite(crN)) readErr = "Reading number honi chahiye";
+    if (!Number.isFinite(srN) || !Number.isFinite(crN)) readErr = "Readings must be numbers";
     else
       try {
         preview = formatHours(machineHours(srN, crN));
@@ -332,8 +332,8 @@ function LogForm({ machine, date, log, moves, onClose }: { machine: MasterRow; d
     else if (mv && !mv.deleted && (mv.qty !== dN || mv.businessDate !== date)) writes.push({ col: "stockMoves", id: mv.id, data: moveData, current: mv, action: "UPDATE" });
     setBusy(true);
     try {
-      await writeEntries(current.id, profile.email, writes, log ? reason.trim() : "Machine log se");
-      toast(navigator.onLine ? "Log save ✓ · server hisab kar raha hai ⏳" : "Phone mein save — network aate hi jayega");
+      await writeEntries(current.id, profile.email, writes, log ? reason.trim() : "From machine log");
+      toast(navigator.onLine ? "Log saved ✓ · server is calculating ⏳" : "Saved on this phone — will sync when online");
       onClose();
     } catch (err) {
       toast(errorText(err), true);
@@ -346,7 +346,7 @@ function LogForm({ machine, date, log, moves, onClose }: { machine: MasterRow; d
     <Dialog title={`${machine.name} — ${formatDate(date)}`} onClose={onClose}>
       <form className="form" onSubmit={save}>
         <div className="field">
-          <span style={{ fontWeight: 600, fontSize: 14 }}>Aaj kaisi chali</span>
+          <span style={{ fontWeight: 600, fontSize: 14 }}>Today's run</span>
           <div className="checks">
             {STATUS.map(([k, l, tone]) => (
               <button type="button" key={k} className="tab" aria-pressed={status === k} onClick={() => setStatus(k)} style={status === k ? { background: `var(--${tone === "neutral" ? "nav-active" : tone})`, borderColor: "transparent", color: "#fff" } : undefined}>
@@ -357,57 +357,57 @@ function LogForm({ machine, date, log, moves, onClose }: { machine: MasterRow; d
         </div>
         <div className="grid-form">
           <div className="field">
-            <label htmlFor="m-sr">SR (shuru reading)</label>
+            <label htmlFor="m-sr">SR (start reading)</label>
             <input id="m-sr" className="input" inputMode="decimal" value={sr} onChange={(e) => setSr(e.target.value)} style={{ fontSize: 22, fontWeight: 700 }} />
-            {lastCr && <span className="hint">Pichhla CR {lastCr.cr} ({formatDate(lastCr.date)})</span>}
+            {lastCr && <span className="hint">Last CR {lastCr.cr} ({formatDate(lastCr.date)})</span>}
           </div>
           <div className="field">
-            <label htmlFor="m-cr">CR (band reading)</label>
+            <label htmlFor="m-cr">CR (close reading)</label>
             <input id="m-cr" className="input" inputMode="decimal" value={cr} onChange={(e) => setCr(e.target.value)} style={{ fontSize: 22, fontWeight: 700 }} />
           </div>
         </div>
         <div className="card" style={{ padding: 12, display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", background: "var(--surface-2)" }}>
-          <span className="small">Ghante (jaanch ke liye — pakka hisab server)</span>
+          <span className="small">Hours (preview — final figure from server)</span>
           <b style={{ fontSize: 22 }}>{readErr ? <span style={{ color: "var(--crit)", fontSize: 14 }}>{readErr}</span> : (preview ?? "—")}</b>
         </div>
-        {needHours && preview === null && !readErr && <span className="small" style={{ color: "var(--warn)" }}>Ghante wali machine — SR aur CR dono bharo</span>}
+        {needHours && preview === null && !readErr && <span className="small" style={{ color: "var(--warn)" }}>Hourly machine — enter both SR and CR</span>}
         <div className="field">
-          <label htmlFor="m-d">Diesel diya (Ltr)</label>
+          <label htmlFor="m-d">Diesel issued (Ltr)</label>
           <input id="m-d" className="input" inputMode="decimal" value={diesel} onChange={(e) => setDiesel(e.target.value)} placeholder="0" style={{ fontSize: 22, fontWeight: 700 }} />
-          <span className="hint">Yahin se Inventory ka diesel ghatega — wahan alag mat likho</span>
+          <span className="hint">This reduces diesel stock in Inventory — do not enter it there again</span>
         </div>
         {status === "BREAKDOWN" && (
           <div className="grid-form">
             <div className="field">
-              <label htmlFor="m-bf">Kab se band</label>
+              <label htmlFor="m-bf">Down since</label>
               <input id="m-bf" className="input" type="time" value={bFrom} onChange={(e) => setBFrom(e.target.value)} />
             </div>
             <div className="field">
-              <label htmlFor="m-bt">Kab theek hui (khaali = abhi band)</label>
+              <label htmlFor="m-bt">Fixed at (blank = still down)</label>
               <input id="m-bt" className="input" type="time" value={bTo} onChange={(e) => setBTo(e.target.value)} />
             </div>
             <div className="field" style={{ gridColumn: "1 / -1" }}>
-              <label htmlFor="m-bw">Kya kharabi *</label>
-              <input id="m-bw" className="input" value={bWhy} onChange={(e) => setBWhy(e.target.value)} placeholder="jaise: hydraulic pipe phata" />
+              <label htmlFor="m-bw">Fault *</label>
+              <input id="m-bw" className="input" value={bWhy} onChange={(e) => setBWhy(e.target.value)} placeholder="e.g. hydraulic hose burst" />
             </div>
           </div>
         )}
         <div className="field">
-          <label htmlFor="m-rm">Remark / kya kaam hua</label>
+          <label htmlFor="m-rm">Remark / work done</label>
           <input id="m-rm" className="input" value={remark} onChange={(e) => setRemark(e.target.value)} />
         </div>
         {log && (
           <div className="field">
-            <label htmlFor="m-why">Badalne ka kaaran *</label>
+            <label htmlFor="m-why">Reason for change *</label>
             <input id="m-why" className="input" value={reason} onChange={(e) => setReason(e.target.value)} />
           </div>
         )}
         <div className="actions">
           <button type="button" className="btn" onClick={onClose}>
-            Radd
+            Cancel
           </button>
           <button className="btn primary" disabled={!valid || busy}>
-            Save karo
+            Save
           </button>
         </div>
       </form>
@@ -437,7 +437,7 @@ function DeductionForm({ machines, date, row, onClose }: { machines: MasterRow[]
         [{ col: "machineDeductions", id: row?.id, current: row, action: row ? "UPDATE" : "CREATE", data: { businessDate: date, machineId: mid, kind, amountPaise: toPaise(n), remark: remark.trim() || null } }],
         row ? reason.trim() : null,
       );
-      toast("Save ✓ — mahine ke bill mein minus hoga");
+      toast("Saved ✓ — will be deducted in the monthly bill");
       onClose();
     } catch (err) {
       toast(errorText(err), true);
@@ -445,7 +445,7 @@ function DeductionForm({ machines, date, row, onClose }: { machines: MasterRow[]
   };
 
   return (
-    <Dialog title="Advance / katauti" onClose={onClose}>
+    <Dialog title="Advance / deduction" onClose={onClose}>
       <form className="form" onSubmit={save}>
         <div className="grid-form">
           <div className="field">
@@ -459,7 +459,7 @@ function DeductionForm({ machines, date, row, onClose }: { machines: MasterRow[]
             </select>
           </div>
           <div className="field">
-            <label htmlFor="d-k">Kya</label>
+            <label htmlFor="d-k">Type</label>
             <select id="d-k" className="input" value={kind} onChange={(e) => setKind(e.target.value)}>
               {DEDUCTION.map(([k, l]) => (
                 <option key={k} value={k}>
@@ -469,26 +469,26 @@ function DeductionForm({ machines, date, row, onClose }: { machines: MasterRow[]
             </select>
           </div>
           <div className="field">
-            <label htmlFor="d-a">Rakam (₹) *</label>
+            <label htmlFor="d-a">Amount (₹) *</label>
             <input id="d-a" className="input" inputMode="decimal" value={amt} onChange={(e) => setAmt(e.target.value)} style={{ fontSize: 22, fontWeight: 700 }} />
           </div>
           <div className="field">
             <label htmlFor="d-r">Remark</label>
-            <input id="d-r" className="input" value={remark} onChange={(e) => setRemark(e.target.value)} placeholder="jaise: UPI, driver Ramesh" />
+            <input id="d-r" className="input" value={remark} onChange={(e) => setRemark(e.target.value)} placeholder="e.g. UPI, driver Ramesh" />
           </div>
         </div>
         {row && (
           <div className="field">
-            <label htmlFor="d-w">Badalne ka kaaran *</label>
+            <label htmlFor="d-w">Reason for change *</label>
             <input id="d-w" className="input" value={reason} onChange={(e) => setReason(e.target.value)} />
           </div>
         )}
         <div className="actions">
           <button type="button" className="btn" onClick={onClose}>
-            Radd
+            Cancel
           </button>
           <button className="btn primary" disabled={!valid}>
-            Save karo
+            Save
           </button>
         </div>
       </form>
@@ -510,8 +510,8 @@ function MonthlyBill({ pid, machines, month, selected, onSelect }: { pid: string
     <section className="card">
       <div className="card-head">
         <div>
-          <h2>Mahine ka bill — {label}</h2>
-          <p className="small muted">Server banata hai: rental − advance / site se liya = dena</p>
+          <h2>Monthly bill — {label}</h2>
+          <p className="small muted">Prepared by the server: rental − advances / site supplies = payable</p>
         </div>
         <select className="input" style={{ width: "auto", minHeight: 38 }} value={selected} onChange={(e) => onSelect(e.target.value)} aria-label="Machine">
           {machines.map((x) => (
@@ -522,19 +522,19 @@ function MonthlyBill({ pid, machines, month, selected, onSelect }: { pid: string
         </select>
       </div>
       {!bill || bill.rentalPaise === undefined ? (
-        <div className="empty">{m?.kind === "COMPANY" ? "Company machine — rental bill nahi" : "Is mahine ka bill abhi nahi bana (log aate hi server banayega)"}</div>
+        <div className="empty">{m?.kind === "COMPANY" ? "Company-owned machine — no rental bill" : "No bill for this month yet (the server prepares it once logs come in)"}</div>
       ) : (
         <div style={{ padding: 16, display: "grid", gap: 8 }}>
-          <Line l={`Rate (${m?.rateType === "MONTH" ? "mahina" : m?.rateType === "HOUR" ? "ghanta" : "din"})`} r={formatINR(bill.ratePaise ?? 0)} />
-          {bill.rateType === "MONTH" && <Line l={`Site se bahar ${bill.offSiteDays} din + na chalne ke ${bill.idleDays} din × ${formatINR(bill.dayRatePaise)}`} r={`−${formatINR(Math.max(0, (bill.ratePaise ?? 0) - bill.rentalPaise))}`} />}
+          <Line l={`Rate (per ${m?.rateType === "MONTH" ? "month" : m?.rateType === "HOUR" ? "hour" : "day"})`} r={formatINR(bill.ratePaise ?? 0)} />
+          {bill.rateType === "MONTH" && <Line l={`Off-site ${bill.offSiteDays} days + idle ${bill.idleDays} days × ${formatINR(bill.dayRatePaise)}`} r={`−${formatINR(Math.max(0, (bill.ratePaise ?? 0) - bill.rentalPaise))}`} />}
           <Line l="Rental" r={formatINR(bill.rentalPaise)} b />
-          <Line l="Advance / site se liya" r={`−${formatINR(bill.deductionPaise)}`} />
+          <Line l="Advances / site supplies" r={`−${formatINR(bill.deductionPaise)}`} />
           <div style={{ borderTop: "2px solid var(--ink)", paddingTop: 8 }}>
-            <Line l="Dena" r={formatINR(bill.netPaise)} b big />
+            <Line l="Payable" r={formatINR(bill.netPaise)} b big />
           </div>
           {bill.missingDates?.length > 0 && (
             <p className="small" style={{ color: "var(--warn)" }}>
-              ⚠ {bill.missingDates.length} din ka log nahi bhara: {bill.missingDates.slice(0, 6).map((d: string) => formatDate(d)).join(", ")}
+              ⚠ No log entered for {bill.missingDates.length} days: {bill.missingDates.slice(0, 6).map((d: string) => formatDate(d)).join(", ")}
               {bill.missingDates.length > 6 ? "…" : ""}
             </p>
           )}

@@ -5,7 +5,7 @@ import { connectFirestoreEmulator, initializeFirestore, persistentLocalCache, pe
 const env = import.meta.env;
 
 for (const k of ["VITE_FIREBASE_API_KEY", "VITE_FIREBASE_AUTH_DOMAIN", "VITE_FIREBASE_PROJECT_ID", "VITE_FIREBASE_APP_ID"] as const) {
-  if (!env[k]) throw new Error(`${k} set nahi hai — apps/web/.env.local dekho (.env.example jaisa)`);
+  if (!env[k]) throw new Error(`${k} is not set — see apps/web/.env.local (like .env.example)`);
 }
 
 export const app = initializeApp({

@@ -47,7 +47,7 @@ export function workedDayFraction(log: MachineDayLog, s: RentalSettings = DEFAUL
     case "HALF":
       return s.halfDayFactor;
     case "HOUR":
-      if (log.hours === undefined) throw new Error(`${log.businessDate}: HOUR status mein ghante chahiye`);
+      if (log.hours === undefined) throw new Error(`${log.businessDate}: hours are required for HOUR status`);
       return Math.min(1, log.hours / s.shiftHours);
     case "BREAKDOWN":
     case "ABSENT":
@@ -64,7 +64,7 @@ export function dayRentalPaise(
 ): Paise {
   if (rateType === "DAY") return roundHalfUp(ratePaise * workedDayFraction(log, s));
   if (log.status === "BREAKDOWN" || log.status === "ABSENT") return roundHalfUp(ratePaise * 0);
-  if (log.hours === undefined) throw new Error(`${log.businessDate}: ghante-rate machine mein SR / CR chahiye`);
+  if (log.hours === undefined) throw new Error(`${log.businessDate}: SR / CR required for an hourly-rate machine`);
   return roundHalfUp(ratePaise * log.hours);
 }
 
@@ -114,7 +114,7 @@ export function monthlyBill(input: MonthlyBillInput, s: RentalSettings = DEFAULT
   const logByDate = new Map<string, MachineDayLog>();
   for (const l of input.logs) {
     if (l.deleted || l.businessDate < from || l.businessDate > to) continue;
-    if (logByDate.has(l.businessDate)) throw new Error(`${l.businessDate}: ek machine ka ek din mein do log`);
+    if (logByDate.has(l.businessDate)) throw new Error(`${l.businessDate}: two logs for the same machine on one day`);
     logByDate.set(l.businessDate, l);
   }
   const missingDates = siteDates.filter((d) => !logByDate.has(d));
