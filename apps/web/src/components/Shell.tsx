@@ -5,6 +5,7 @@ import { can, logout, useProfile } from "../lib/auth";
 import { APP_ENV } from "../lib/firebase";
 import { useProjects } from "../lib/projects";
 import type { Permission } from "../lib/types";
+import { Logo } from "./Logo";
 
 interface NavItem {
   to: string;
@@ -22,9 +23,9 @@ const NAV: { group: string | null; items: NavItem[] }[] = [
     items: [
       { to: "/", ic: "▦", label: "Dashboard" },
       { to: "/projects", ic: "🗂️", label: "Projects" },
-      { to: "/inventory", ic: "📦", label: "Inventory (Material Hub)", soon: "P2" },
+      { to: "/inventory", ic: "📦", label: "Inventory (Material Hub)" },
       { to: "/store", ic: "🧰", label: "Store / Saman Register", soon: "P2" },
-      { to: "/machinery", ic: "🔧", label: "Machinery", soon: "P2" },
+      { to: "/machinery", ic: "🔧", label: "Machinery" },
       { to: "/attendance", ic: "👥", label: "Attendance", soon: "P2" },
       { to: "/work", ic: "📅", label: "Daily Work", soon: "P2" },
       { to: "/creditors", ic: "📒", label: "Creditors / Party Ledger", soon: "P2" },
@@ -95,7 +96,7 @@ export function Shell() {
             ☰
           </button>
           <div className="logo">
-            <div className="mark">BPMC</div>
+            <Logo size={46} />
             <div>
               <b>BP Mishra &amp; Co.</b>
               <span>INFRASTRUCTURE &amp; CONSTRUCTION</span>
@@ -128,7 +129,7 @@ export function Shell() {
       <div className="layout">
         <aside className={`side ${open ? "open" : ""}`} aria-label="Menu">
           <div className="proj-card">
-            <div className="mark">BPMC</div>
+            <Logo size={40} />
             <div>
               <b>{current?.name ?? "Koi project nahi"}</b>
               <span>{current ? `${current.code} · Site` : "Admin se project maango"}</span>
@@ -154,7 +155,7 @@ export function Shell() {
           </nav>
         </aside>
         {open && <div className="scrim" onClick={() => setOpen(false)} />}
-        <main>
+        <main className={loc.pathname === "/" ? "watermark" : undefined}>
           <div className="view">
             <Outlet />
           </div>

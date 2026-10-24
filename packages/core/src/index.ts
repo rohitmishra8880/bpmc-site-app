@@ -11,3 +11,4 @@ export * from "./ledger";
 export * from "./rental";
 export * from "./validate";
 export * from "./migrate";
+export * from "./machine";

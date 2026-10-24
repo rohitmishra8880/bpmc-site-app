@@ -128,46 +128,22 @@ function runHisab() {
       .filter(function (m) { return !m.data.deleted; })
       .map(function (m) { return m.id; });
 
+    var ctx = { today: today, started: started, materialIds: materialIds, machines: null, rental: null };
+
     listDocs_('projects').forEach(function (p) {
       var parent = 'projects/' + p.id;
-      var pending = query_(parent, 'stockMoves', 'serverStatus', ENTRY_STATUS_PENDING);
-      if (!pending.length) return;
-
-      // Kahan se dobara: sabse purani PENDING tarikh, khula edit-window (D−2), aur Admin ke khole din
-      var from = BPMCCore.addDays(today, -BPMCCore.EDIT_WINDOW_DAYS);
-      pending.forEach(function (d) { if (d.data.businessDate && d.data.businessDate < from) from = d.data.businessDate; });
-      query_(parent, 'unlocks').forEach(function (u) {
-        if (u.data.expiresAt && u.data.expiresAt > started && u.id < from) from = u.id;
-      });
-
-      var all = query_(parent, 'stockMoves');
-      var moves = all
-        .filter(function (d) { return d.data.businessDate && d.data.itemId && d.data.type; })
-        .map(function (d) {
-          return { id: d.id, itemId: d.data.itemId, businessDate: d.data.businessDate, type: d.data.type, qty: Number(d.data.qty) || 0, deleted: !!d.data.deleted };
-        });
-      var items = materialIds.slice();
-      moves.forEach(function (m) { if (items.indexOf(m.itemId) < 0) items.push(m.itemId); });
-      items.sort();
-
-      var ledger = BPMCCore.buildStockLedger(moves, from, today, items);
-      commit_(ledger.map(function (day) {
-        return {
-          update: { name: fullName_(parent + '/days/' + day.date), fields: { stock: enc_(day.items), date: enc_(day.date) } },
-          updateMask: { fieldPaths: ['stock', 'date'] },
-          updateTransforms: [{ fieldPath: 'stockComputedAt', setToServerValue: 'REQUEST_TIME' }],
-        };
-      }));
-
-      var failed = batchWrite_(pending.map(function (d) {
-        return {
-          update: { name: d.name, fields: { serverStatus: enc_('DONE') } },
-          updateMask: { fieldPaths: ['serverStatus'] },
-          updateTransforms: [{ fieldPath: 'serverAt', setToServerValue: 'REQUEST_TIME' }],
-          currentDocument: { updateTime: d.updateTime },
-        };
-      }));
-      log.projects[p.id] = { pending: pending.length, from: from, days: ledger.length, notMarked: failed };
+      var pStock = query_(parent, 'stockMoves', 'serverStatus', ENTRY_STATUS_PENDING);
+      var pLogs = query_(parent, 'machineLogs', 'serverStatus', ENTRY_STATUS_PENDING);
+      var pDeds = query_(parent, 'machineDeductions', 'serverStatus', ENTRY_STATUS_PENDING);
+      if (!pStock.length && !pLogs.length && !pDeds.length) return;
+      var out = {};
+      if (pStock.length) {
+        out.stock = hisabStock_(parent, pStock, ctx);
+        out.udhaar = hisabUdhaar_(parent, p.id, pStock);
+      }
+      if (pLogs.length || pDeds.length) out.machines = hisabMachines_(parent, pLogs, pDeds, ctx);
+      out.notMarked = markDone_(pStock.concat(pLogs, pDeds));
+      log.projects[p.id] = out;
     });
   } catch (e) {
     log.error = String(e && e.message || e);
@@ -183,6 +159,201 @@ function runHisab() {
       lock.releaseLock();
     }
   }
+}
+
+/** Entry par DONE — sirf agar server ke padhne ke baad phone ne dobara na badla ho */
+function markDone_(docs) {
+  if (!docs.length) return 0;
+  return batchWrite_(docs.map(function (d) {
+    return {
+      update: { name: d.name, fields: { serverStatus: enc_('DONE') } },
+      updateMask: { fieldPaths: ['serverStatus'] },
+      updateTransforms: [{ fieldPath: 'serverAt', setToServerValue: 'REQUEST_TIME' }],
+      currentDocument: { updateTime: d.updateTime },
+    };
+  }));
+}
+
+/** field ki range (from..to dono shamil) */
+function rangeQuery_(parent, col, field, from, to) {
+  var sq = {
+    from: [{ collectionId: col }],
+    where: { compositeFilter: { op: 'AND', filters: [
+      { fieldFilter: { field: { fieldPath: field }, op: 'GREATER_THAN_OR_EQUAL', value: enc_(from) } },
+      { fieldFilter: { field: { fieldPath: field }, op: 'LESS_THAN_OR_EQUAL', value: enc_(to) } },
+    ] } },
+  };
+  var r = fsCall_('post', '/' + parent + ':runQuery', { structuredQuery: sq }) || [];
+  return r.filter(function (x) { return x.document; }).map(function (x) { return docOf_(x.document); });
+}
+
+/** Stock: sabse purani badli tarikh se aaj tak opening / aaya / kharch / closing → days/{date}.stock */
+function hisabStock_(parent, pending, ctx) {
+  // Kahan se dobara: sabse purani PENDING tarikh, khula edit-window (D−2), aur Admin ke khole din
+  var from = BPMCCore.addDays(ctx.today, -BPMCCore.EDIT_WINDOW_DAYS);
+  pending.forEach(function (d) { if (d.data.businessDate && d.data.businessDate < from) from = d.data.businessDate; });
+  query_(parent, 'unlocks').forEach(function (u) {
+    if (u.data.expiresAt && u.data.expiresAt > ctx.started && u.id < from) from = u.id;
+  });
+  var moves = query_(parent, 'stockMoves')
+    .filter(function (d) { return d.data.businessDate && d.data.itemId && d.data.type; })
+    .map(function (d) {
+      return { id: d.id, itemId: d.data.itemId, businessDate: d.data.businessDate, type: d.data.type, qty: Number(d.data.qty) || 0, deleted: !!d.data.deleted };
+    });
+  var items = ctx.materialIds.slice();
+  moves.forEach(function (m) { if (items.indexOf(m.itemId) < 0) items.push(m.itemId); });
+  items.sort();
+  var ledger = BPMCCore.buildStockLedger(moves, from, ctx.today, items);
+  commit_(ledger.map(function (day) {
+    return {
+      update: { name: fullName_(parent + '/days/' + day.date), fields: { stock: enc_(day.items), date: enc_(day.date) } },
+      updateMask: { fieldPaths: ['stock', 'date'] },
+      updateTransforms: [{ fieldPath: 'stockComputedAt', setToServerValue: 'REQUEST_TIME' }],
+    };
+  }));
+  return { pending: pending.length, from: from, days: ledger.length };
+}
+
+/** Udhaar par aaya maal → us party ke khate mein BILL (ledger/sm_<moveId>). Entry hati / udhaar nahi rahi → bill bhi hata. */
+function hisabUdhaar_(parent, pid, pending) {
+  var writes = [];
+  var now = new Date();
+  pending.forEach(function (d) {
+    var m = d.data;
+    if (m.type !== 'IN') return;
+    var path = parent + '/ledger/sm_' + d.id;
+    var existing = getDoc_(path);
+    var isUdhaar = m.payMode === 'UDHAAR' && m.partyId && !m.deleted;
+    if (!isUdhaar) {
+      if (existing && !existing.data.deleted) {
+        writes.push({
+          update: { name: fullName_(path), fields: encFields_({ deleted: { by: 'server', reason: m.deleted ? 'Stock entry hata di gayi' : 'Ab udhaar nahi', at: now }, rev: (existing.data.rev || 1) + 1, updatedAt: now, updatedBy: 'server' }) },
+          updateMask: { fieldPaths: ['deleted', 'rev', 'updatedAt', 'updatedBy'] },
+        });
+      }
+      return;
+    }
+    var amt = BPMCCore.lineAmount(Number(m.qty) || 0, m.ratePaise || 0, m.gstPct || 0);
+    writes.push({
+      update: {
+        name: fullName_(path),
+        fields: encFields_({
+          projectId: pid, businessDate: m.businessDate, type: 'BILL', partyId: m.partyId, partyName: m.partyName || null,
+          amountPaise: amt.totalPaise, basePaise: amt.basePaise, gstPaise: amt.gstPaise,
+          billNo: m.billNo || null, itemName: m.itemName || m.itemId, qty: m.qty, source: 'stockMoves/' + d.id,
+          remark: m.ratePaise ? null : 'Rate nahi likha — rakam 0, stock entry mein rate bharo',
+          deleted: null, serverStatus: 'DONE', createdBy: existing ? existing.data.createdBy : 'server', createdAt: existing ? existing.data.createdAt : now,
+          updatedBy: 'server', updatedAt: now, rev: existing ? (existing.data.rev || 1) + 1 : 1, lastAuditId: null,
+        }),
+      },
+    });
+  });
+  if (writes.length) commit_(writes);
+  return writes.length;
+}
+
+/** Machine: din ka hisab (days/{date}.machines) + mahine ka bill (machineBills/{machine}_{YYYY-MM}) */
+function hisabMachines_(parent, pLogs, pDeds, ctx) {
+  if (!ctx.machines) {
+    ctx.machines = {};
+    listDocs_('masters_machines').forEach(function (m) { ctx.machines[m.id] = m.data; });
+    var g = getDoc_('settings/global');
+    var r = g && g.data.rental || {};
+    ctx.rental = {
+      shiftHours: r.shiftHours || 8, halfDayFactor: r.halfDayFactor != null ? r.halfDayFactor : 0.5,
+      idleDayFactor: r.idleDayFactor || 0, monthDivisor: r.monthDivisor || 30,
+    };
+  }
+  var dates = {};
+  var months = {};
+  pLogs.forEach(function (d) { if (d.data.businessDate) { dates[d.data.businessDate] = 1; months[d.data.businessDate.slice(0, 7)] = 1; } });
+  pDeds.forEach(function (d) { if (d.data.businessDate) months[d.data.businessDate.slice(0, 7)] = 1; });
+
+  var writes = [];
+  Object.keys(dates).forEach(function (date) {
+    var logs = latestPerMachine_(query_(parent, 'machineLogs', 'businessDate', date));
+    var machines = {};
+    var tot = { dieselLtr: 0, hours: 0, amountPaise: 0, running: 0, breakdown: 0 };
+    Object.keys(logs).forEach(function (mid) {
+      var l = logs[mid].data;
+      var m = ctx.machines[mid] || { name: l.machineName || mid };
+      var r = BPMCCore.machineDay({ businessDate: date, status: l.status, sr: l.sr, cr: l.cr, dieselLtr: l.dieselLtr }, m, ctx.rental);
+      machines[mid] = r;
+      tot.dieselLtr += r.dieselLtr;
+      tot.hours += r.hours || 0;
+      tot.amountPaise += r.amountPaise || 0;
+      if (l.status === 'BREAKDOWN') tot.breakdown++;
+      else if (l.status !== 'ABSENT') tot.running++;
+    });
+    tot.hours = Math.round(tot.hours * 100) / 100;
+    writes.push({
+      update: { name: fullName_(parent + '/days/' + date), fields: { machines: enc_(machines), machineTotals: enc_(tot), date: enc_(date) } },
+      updateMask: { fieldPaths: ['machines', 'machineTotals', 'date'] },
+      updateTransforms: [{ fieldPath: 'machinesComputedAt', setToServerValue: 'REQUEST_TIME' }],
+    });
+  });
+
+  var bills = 0;
+  Object.keys(months).forEach(function (month) {
+    var end = month + '-' + ('0' + BPMCCore.daysInMonth(month)).slice(-2);
+    var logsByM = {};
+    rangeQuery_(parent, 'machineLogs', 'businessDate', month + '-01', end).forEach(function (d) {
+      (logsByM[d.data.machineId] = logsByM[d.data.machineId] || []).push(d);
+    });
+    var dedsByM = {};
+    rangeQuery_(parent, 'machineDeductions', 'businessDate', month + '-01', end).forEach(function (d) {
+      (dedsByM[d.data.machineId] = dedsByM[d.data.machineId] || []).push({ kind: d.data.kind, amountPaise: d.data.amountPaise || 0, deleted: !!d.data.deleted });
+    });
+    Object.keys(logsByM).concat(Object.keys(dedsByM)).filter(function (v, i, a) { return a.indexOf(v) === i; }).forEach(function (mid) {
+      var m = ctx.machines[mid];
+      if (!m || m.kind === 'COMPANY' || !m.rateType || m.ratePaise == null) return;
+      var perDay = {};
+      (logsByM[mid] || []).forEach(function (d) {
+        if (d.data.deleted) return;
+        var cur = perDay[d.data.businessDate];
+        if (!cur || d.updateTime > cur.updateTime) perDay[d.data.businessDate] = d;
+      });
+      var logs = Object.keys(perDay).map(function (k) {
+        var l = perDay[k].data;
+        var hours = null;
+        try { if (l.sr != null && l.cr != null) hours = BPMCCore.machineHours(l.sr, l.cr); } catch (e) { hours = null; }
+        return hours === null ? { businessDate: l.businessDate, status: l.status } : { businessDate: l.businessDate, status: l.status, hours: hours };
+      });
+      var fields;
+      try {
+        var b = BPMCCore.monthlyBill({
+          rateType: m.rateType, ratePaise: m.ratePaise, month: month, logs: logs, deductions: dedsByM[mid] || [],
+          onSiteFrom: m.siteFrom || undefined, onSiteTo: m.siteTo || undefined,
+        }, ctx.rental);
+        b.offSiteDays = BPMCCore.daysInMonth(month) - b.siteDays;
+        b.ratePaise = m.ratePaise;
+        b.rateType = m.rateType;
+        b.machineName = m.name;
+        b.error = null;
+        fields = b;
+      } catch (e) {
+        fields = { month: month, machineName: m.name, error: String(e.message || e) };
+      }
+      writes.push({
+        update: { name: fullName_(parent + '/machineBills/' + mid + '_' + month), fields: encFields_(fields) },
+        updateTransforms: [{ fieldPath: 'computedAt', setToServerValue: 'REQUEST_TIME' }],
+      });
+      bills++;
+    });
+  });
+  if (writes.length) commit_(writes);
+  return { dates: Object.keys(dates).length, bills: bills };
+}
+
+/** Ek machine ke ek din mein ek hi log gino (offline se do ban gaye to sabse naya) */
+function latestPerMachine_(docs) {
+  var out = {};
+  docs.forEach(function (d) {
+    if (d.data.deleted || !d.data.machineId) return;
+    var cur = out[d.data.machineId];
+    if (!cur || d.updateTime > cur.updateTime) out[d.data.machineId] = d;
+  });
+  return out;
 }
 
 /** Ek baar chalao: hisab har 5 minute + roz raat 11:30 IST backup (purane trigger hata ke). */

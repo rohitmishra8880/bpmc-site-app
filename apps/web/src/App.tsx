@@ -5,6 +5,8 @@ import { ProjectProvider } from "./lib/projects";
 import { ToastProvider } from "./lib/ui";
 import { Dashboard } from "./pages/Dashboard";
 import { EditHistory } from "./pages/EditHistory";
+import { Inventory } from "./pages/Inventory";
+import { Machinery } from "./pages/Machinery";
 import { Login, NoAccess } from "./pages/Login";
 import { Masters } from "./pages/Masters";
 import { Projects } from "./pages/Projects";
@@ -26,9 +28,9 @@ function Gate() {
           <Route path="masters" element={<Masters />} />
           <Route path="users" element={<Users />} />
           <Route path="history" element={<EditHistory />} />
-          <Route path="inventory" element={<Soon title="Inventory (Material Hub)" phase="Phase 2" what="Diesel, Gitti, Reti, Steel, Cement, Bricks, Oil — aaya / kharch / baaki" />} />
+          <Route path="inventory" element={<Inventory />} />
           <Route path="store" element={<Soon title="Store / Saman Register" phase="Phase 2" what="Auzaar aur saman — aaya, thekedar ko diya, wapas" />} />
-          <Route path="machinery" element={<Soon title="Machinery" phase="Phase 2" what="SR / CR, ghante, diesel, breakdown, rental" />} />
+          <Route path="machinery" element={<Machinery />} />
           <Route path="attendance" element={<Soon title="Attendance" phase="Phase 2" what="Staff KYC + khata, thekedar muster (Mistri / Kuli / Reja)" />} />
           <Route path="work" element={<Soon title="Daily Work" phase="Phase 2" what="Concrete M³, shuttering Sq M, steel Kg, photo" />} />
           <Route path="creditors" element={<Soon title="Creditors / Party Ledger" phase="Phase 2" what="Bill, bhugtan, bakaya" />} />

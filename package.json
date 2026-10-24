@@ -15,6 +15,7 @@
     "build": "npm run build -w @bpmc/web",
     "dev": "npm run dev -w @bpmc/web",
     "test:rules": "firebase emulators:exec --only firestore --project demo-bpmc \"npm run test -w @bpmc/rules-test\"",
+    "test:server": "npm run build -w @bpmc/server && firebase emulators:exec --only firestore --project demo-bpmc \"node scripts/server-e2e.mjs\"",
     "emulators": "firebase emulators:start --project demo-bpmc"
   },
   "devDependencies": {

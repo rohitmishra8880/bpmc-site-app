@@ -194,6 +194,34 @@ describe("edit aur Edit History", () => {
   });
 });
 
+describe("machine log + diesel ek save mein (Phase 2)", () => {
+  it("machineLogs + linked stockMoves, dono ke apne audit ke saath — chale", async () => {
+    const db = dbAs(SITE);
+    const batch = writeBatch(db);
+    const base = { projectId: PID, createdBy: SITE, createdAt: serverTimestamp(), deleted: null, rev: 1, serverStatus: "PENDING" };
+    batch.set(doc(db, `projects/${PID}/machineLogs/L1`), { ...base, lastAuditId: "ma1", businessDate: TODAY, machineId: "poc210", status: "FULL", sr: 2944, cr: 2951.8, dieselLtr: 115 });
+    batch.set(doc(db, `projects/${PID}/stockMoves/ml_L1`), { ...base, lastAuditId: "ma2", businessDate: TODAY, itemId: "diesel", type: "USE", qty: 115, linkedMachineLogId: "L1" });
+    batch.set(doc(db, `projects/${PID}/auditLog/ma1`), { entity: "machineLogs/L1", action: "CREATE", rev: 1, by: SITE, at: serverTimestamp(), reason: null });
+    batch.set(doc(db, `projects/${PID}/auditLog/ma2`), { entity: "stockMoves/ml_L1", action: "CREATE", rev: 1, by: SITE, at: serverTimestamp(), reason: null });
+    await assertSucceeds(batch.commit());
+  });
+
+  it("ek audit do entry par nahi chalega", async () => {
+    const db = dbAs(SITE);
+    const batch = writeBatch(db);
+    const base = { projectId: PID, createdBy: SITE, createdAt: serverTimestamp(), deleted: null, rev: 1, serverStatus: "PENDING", lastAuditId: "same" };
+    batch.set(doc(db, `projects/${PID}/machineLogs/L1`), { ...base, businessDate: TODAY, machineId: "x", status: "FULL" });
+    batch.set(doc(db, `projects/${PID}/stockMoves/ml_L1`), { ...base, businessDate: TODAY, itemId: "diesel", type: "USE", qty: 1 });
+    batch.set(doc(db, `projects/${PID}/auditLog/same`), { entity: "machineLogs/L1", action: "CREATE", rev: 1, by: SITE, at: serverTimestamp(), reason: null });
+    await assertFails(batch.commit());
+  });
+
+  it("phone machine bill / server status DONE nahi likh sakta", async () => {
+    await assertFails(setDoc(doc(dbAs(SITE), `projects/${PID}/machineBills/poc200_2026-10`), { netPaise: 1 }));
+    await assertFails(writeEntry(dbAs(SITE), SITE, "e9", { ...move(), serverStatus: "DONE" }));
+  });
+});
+
 describe("delete / Recycle Bin", () => {
   it("hard delete kisi ko nahi — Admin ko bhi nahi", async () => {
     await seedEntry("e1", TODAY);

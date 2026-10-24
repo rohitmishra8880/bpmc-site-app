@@ -47,6 +47,8 @@ const MASTERS: { col: string; label: string; one: string; fields: Field[] }[] = 
       { key: "rateType", label: "Rate kis hisab se", type: "select", show: true, options: [["DAY", "Din ke hisab"], ["MONTH", "Mahine ke hisab"], ["HOUR", "Ghante ke hisab"]] },
       { key: "ratePaise", label: "Rate (₹)", type: "money", show: true },
       { key: "rateFrom", label: "Rate kab se lagu", type: "date" },
+      { key: "siteFrom", label: "Site par kab aayi", type: "date", hint: "Mahine ke beech aayi to pehle ke din bill se minus" },
+      { key: "siteTo", label: "Site se kab gayi", type: "date", hint: "Khaali = abhi site par hai" },
       { key: "dieselBy", label: "Diesel kiska", type: "select", options: [["SITE", "Site ka"], ["OWNER", "Owner ka"]] },
       { key: "driver", label: "Driver", type: "text" },
     ],

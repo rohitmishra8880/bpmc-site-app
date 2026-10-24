@@ -59,6 +59,17 @@ p { margin: 0; }
 .top-inner { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; padding: 10px max(16px, env(safe-area-inset-right, 0px)) 10px max(16px, env(safe-area-inset-left, 0px)); }
 .logo { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .mark { width: 44px; height: 44px; border-radius: 50%; border: 2px solid var(--ink); display: grid; place-items: center; font-weight: 800; font-size: 12px; background: var(--accent-soft); flex: none; }
+.logo-img { border-radius: 50%; background: #fff; object-fit: contain; flex: none; }
+/* Dashboard ke peeche halka logo (watermark) — padhne mein rukawat na ho */
+.watermark { position: relative; isolation: isolate; }
+.watermark::before {
+  content: ""; position: fixed; z-index: -1; pointer-events: none;
+  inset: 120px 0 0 0; margin: auto; width: min(520px, 70vw); height: min(520px, 70vw);
+  background: url("/bpmc-logo.png") center / contain no-repeat; opacity: .06;
+}
+@media (min-width: 1024px) { .watermark::before { left: 270px; } }
+:root[data-theme="dark"] .watermark::before { opacity: .08; filter: grayscale(.3); }
+@media print { .watermark::before { position: absolute; opacity: .08; } }
 .logo b { display: block; font-size: 18px; line-height: 1.1; }
 .logo span { display: block; font-size: 11px; font-weight: 700; color: var(--accent); letter-spacing: .06em; }
 .site-sel { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 7px 12px; font-weight: 600; max-width: 100%; }

@@ -16,7 +16,17 @@
 
 ---
 
-## Phase 1 — haal (24 Oct 2026, chal raha hai)
+## Phase 2 — haal (24 Oct 2026, chal raha hai)
+- ✅ Inventory / Diesel: material tabs (Oil ke saath), 4 card server ke hisab se, aaya (party, bill, bhugtan, rate, GST, unit) / kharch, edit (reason) / hatao
+- ✅ Machinery: daily log (SR prefill = pichhla CR, status, diesel, breakdown samay + kaaran), advance / katauti, mahine ka bill (server)
+- ✅ Machine log ka diesel usi save mein stockMoves USE (ek hi jagah — galti #5, #7); diesel 0 = movement 0 (hatta nahi)
+- ✅ Server: machine din ka hisab (days/.machines), machineBills (Day/Hour/Month, site se bahar + na chalne ke din minus, advance minus), udhaar maal → ledger BILL
+- ✅ Tests: core 71, rules 31, **server e2e 12/12** (Apps Script code emulator par — `npm run test:server`)
+- ✅ Logo (G:\My Drive\B.P MISHRA PROFILE\logo\BPMC_logo.png se copy, original nahi chhua): header, sidebar, login, favicon, Dashboard watermark
+- 📌 Rohit: **har DPR mein logo watermark** (Phase 3 PDF / print / Obsidian) — yahi logo
+- ⏳ Baaki Phase 2: Attendance, Store / Saman Register, Daily Work + Drive photos, Creditors
+
+## Phase 1 — haal (24 Oct 2026) ✅
 - ✅ core formule + jaanch (GSTIN / mobile / IFSC) — 61 tests
 - ✅ Firestore rules (roles, project, 2-din lock, audit-in-batch, masters audit, soft-delete) — 27 emulator tests
 - ✅ Design v2 OK (purane AI Studio app jaisa left sidebar)

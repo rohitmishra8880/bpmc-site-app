@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Logo } from "../components/Logo";
 import { loginWithGoogle, logout, sendEmailLink } from "../lib/auth";
 import { APP_ENV } from "../lib/firebase";
 import { errorText } from "../lib/ui";
@@ -37,7 +38,7 @@ export function Login() {
     <div className="login-wrap">
       <div className="card login">
         <div className="logo">
-          <div className="mark">BPMC</div>
+          <Logo size={64} />
           <div>
             <b>BP Mishra &amp; Co.</b>
             <span>INFRASTRUCTURE &amp; CONSTRUCTION</span>
