@@ -5,6 +5,8 @@
   "description": "Google Apps Script server — hisab, Drive photos, Obsidian backup, Sheet khata (PLAN.md §1). clasp se deploy.",
   "type": "module",
   "scripts": {
+    "build": "node build.mjs",
+    "push": "node build.mjs && clasp push --force",
     "clasp": "clasp"
   },
   "devDependencies": {

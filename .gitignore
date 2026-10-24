@@ -7,6 +7,9 @@ coverage/
 .cache/
 *.tsbuildinfo
 
+# packages/core se banta hai (npm run build -w @bpmc/server)
+apps/server/src/core.js
+
 # secrets — kabhi GitHub par nahi (CLAUDE.md T4)
 .env
 .env.*

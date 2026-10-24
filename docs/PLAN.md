@@ -16,6 +16,14 @@
 
 ---
 
+## Phase 1 — haal (24 Oct 2026, chal raha hai)
+- ✅ core formule + jaanch (GSTIN / mobile / IFSC) — 61 tests
+- ✅ Firestore rules (roles, project, 2-din lock, audit-in-batch, masters audit, soft-delete) — 27 emulator tests
+- ✅ Design v2 OK (purane AI Studio app jaisa left sidebar)
+- ✅ Web app test par: https://bpmc-site-test.web.app — Google / email-link login, access gate, Projects, Masters (Oil ke saath), Users & Roles, Edit History
+- ✅ Server (Apps Script): core bundle, Firestore REST, `runHisab` (har 5 min, stock → days/), `bootstrapPhase1`, `installTriggers`
+- ⏳ Baaki: Settings & Backup screen, Obsidian roz backup (Apps Script → Drive), GitHub Actions doosri copy, migration framework, Recycle Bin page
+
 ## Phase 0 — haal (24 Oct 2026) ✅
 - Repo: https://github.com/rohitmishra8880/bpmc-site-app (private) — commit `c2abce3`
 - Firebase `bpmc-site-test`: Spark, Firestore asia-south1, Google login ON. `bpmc-site-live` abhi baaki.
