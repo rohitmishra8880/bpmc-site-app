@@ -22,7 +22,9 @@
 - ✅ Design v2 OK (purane AI Studio app jaisa left sidebar)
 - ✅ Web app test par: https://bpmc-site-test.web.app — Google / email-link login, access gate, Projects, Masters (Oil ke saath), Users & Roles, Edit History
 - ✅ Server (Apps Script): core bundle, Firestore REST, `runHisab` (har 5 min, stock → days/), `bootstrapPhase1`, `installTriggers`
-- ⏳ Baaki: Settings & Backup screen, Obsidian roz backup (Apps Script → Drive), GitHub Actions doosri copy, migration framework, Recycle Bin page
+- ✅ Rohit ne bootstrap + triggers chalaye, Google login test par chala (24 Oct, 13:52)
+- ✅ Settings & Backup screen; `dailyBackup` (roz ~11:30 IST) → har vault ka `Backup\<date> full.json`, same naam ho to v2, likh ke padh ke jaanch
+- ⏳ Baaki: GitHub Actions doosri copy, restore (preview → OK), migration framework, Recycle Bin page
 
 ## Phase 0 — haal (24 Oct 2026) ✅
 - Repo: https://github.com/rohitmishra8880/bpmc-site-app (private) — commit `c2abce3`

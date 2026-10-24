@@ -233,6 +233,15 @@ describe("Admin ke kaam", () => {
     await assertSucceeds(setDoc(doc(dbAs(ADMIN), "users/new@bpmc.test"), { role: "site_user", active: true, projectIds: [PID] }));
   });
 
+  it("backup ka record: Admin padhe, site user nahi; likhe koi nahi (sirf server)", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "backupRuns/r1"), { ok: true });
+    });
+    await assertSucceeds(getDoc(doc(dbAs(ADMIN), "backupRuns/r1")));
+    await assertFails(getDoc(doc(dbAs(SITE), "backupRuns/r1")));
+    await assertFails(setDoc(doc(dbAs(ADMIN), "backupRuns/r2"), { ok: true }));
+  });
+
   it("site user doosre user ka record nahi padh sakta", async () => {
     await assertSucceeds(getDoc(doc(dbAs(SITE), `users/${SITE}`)));
     await assertFails(getDoc(doc(dbAs(SITE), `users/${OTHER}`)));

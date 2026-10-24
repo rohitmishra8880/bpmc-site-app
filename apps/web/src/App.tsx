@@ -8,6 +8,7 @@ import { EditHistory } from "./pages/EditHistory";
 import { Login, NoAccess } from "./pages/Login";
 import { Masters } from "./pages/Masters";
 import { Projects } from "./pages/Projects";
+import { Settings } from "./pages/Settings";
 import { Users } from "./pages/Users";
 
 function Gate() {
@@ -34,7 +35,7 @@ function Gate() {
           <Route path="ai" element={<Soon title="AI Insights" phase="Phase 4" what="Asli data se sawaal-jawab" />} />
           <Route path="help" element={<Soon title="Help Center" phase="Phase 4" what="Calculator, SOP, emergency number" />} />
           <Route path="bin" element={<Soon title="Recycle Bin" phase="Phase 2" what="Hataayi entries — abhi Masters mein 'Hataye hue bhi dikhao' se wapas la sakte ho" />} />
-          <Route path="settings" element={<Soon title="Settings & Backup" phase="Phase 1 ka agla hissa" what="Rental niyam, alert limit, backup / restore" />} />
+          <Route path="settings" element={<Settings />} />
           <Route path="*" element={<Soon title="Page nahi mila" phase="—" what="Yeh link galat hai" />} />
         </Route>
       </Routes>

@@ -75,6 +75,11 @@ service cloud.firestore {
       allow read: if isActiveUser();
       allow write: if isAdmin();
     }
+    // Backup ka record — server likhta hai, Admin dekhta hai
+    match /backupRuns/{id} {
+      allow read: if can('backup.manage');
+      allow write: if false;
+    }
     match /settings/{doc} {
       allow read: if isActiveUser();
       allow write: if isAdmin();

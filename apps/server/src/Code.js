@@ -185,13 +185,101 @@ function runHisab() {
   }
 }
 
-/** Ek baar chalao: har 5 minute wala trigger lagao (purane hata ke). */
+/** Ek baar chalao: hisab har 5 minute + roz raat 11:30 IST backup (purane trigger hata ke). */
 function installTriggers() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
-    if (t.getHandlerFunction() === 'runHisab') ScriptApp.deleteTrigger(t);
+    if (t.getHandlerFunction() === 'runHisab' || t.getHandlerFunction() === 'dailyBackup') ScriptApp.deleteTrigger(t);
   });
   ScriptApp.newTrigger('runHisab').timeBased().everyMinutes(5).create();
-  Logger.log('runHisab har 5 minute chalega');
+  ScriptApp.newTrigger('dailyBackup').timeBased().everyDays(1).atHour(23).nearMinute(30).inTimezone('Asia/Kolkata').create();
+  Logger.log('runHisab har 5 minute chalega; dailyBackup roz raat ~11:30 IST');
+}
+
+// ---------------- roz ka backup → Obsidian vault (Google Drive) ----------------
+// G:\My Drive\AI obsidian\<project vault>\Backup\<YYYY-MM-DD> full.json
+// Niyam: purani file kabhi na chhuo / hatao / rename karo; same naam ho to " v2"; khaali file kabhi nahi.
+
+var OBSIDIAN_ROOT = 'AI obsidian';
+var PROJECT_COLLECTIONS = ['stockMoves', 'machineLogs', 'machineDeductions', 'labourMuster', 'staffAttendance', 'staffPassbook',
+  'workEntries', 'storeMoves', 'ledger', 'photos', 'auditLog', 'unlocks', 'days', 'machineBills'];
+var GLOBAL_COLLECTIONS = ['users', 'roles', 'settings', 'projects', 'masters_materials', 'masters_machines', 'masters_contractors',
+  'masters_parties', 'masters_storeItems', 'masters_staff', 'auditLog'];
+
+function obsidianRoot_() {
+  var it = DriveApp.getRootFolder().getFoldersByName(OBSIDIAN_ROOT);
+  if (!it.hasNext()) throw new Error('My Drive mein "' + OBSIDIAN_ROOT + '" folder nahi mila');
+  return it.next();
+}
+/** "kondagaon site/kondagaon pawada anicut" jaisa raasta — jo folder nahi hai sirf wahi banata hai */
+function folderPath_(parent, path) {
+  return path.split('/').filter(String).reduce(function (f, name) {
+    var it = f.getFoldersByName(name);
+    return it.hasNext() ? it.next() : f.createFolder(name);
+  }, parent);
+}
+/** Naya file — same naam pehle se ho to " v2", " v3"… (purani ko kabhi overwrite nahi) */
+function createNewFile_(folder, baseName, ext, content, mime) {
+  var name = baseName + ext;
+  for (var v = 2; folder.getFilesByName(name).hasNext(); v++) name = baseName + ' v' + v + ext;
+  var file = folder.createFile(name, content, mime);
+  // Likhne ke baad padh ke jaancho — khaali / toota file nahi chahiye
+  var back = file.getBlob().getDataAsString();
+  if (!back || back.length < 20) throw new Error(name + ' khaali bana');
+  if (ext === '.json') JSON.parse(back);
+  return file;
+}
+function plain_(doc) {
+  return { id: doc.id, updateTime: doc.updateTime, data: doc.data };
+}
+
+/**
+ * Har project ka poora data + saari master list ek JSON mein, us project ke vault ke Backup\ folder mein.
+ * Raat ka trigger, migration se pehle, aur restore se pehle — teeno yahi chalate hain.
+ */
+function dailyBackup(reason) {
+  var started = new Date();
+  var date = BPMCCore.toBusinessDateIST(started);
+  var why = typeof reason === 'string' ? reason : 'roz ka backup';
+  var root = obsidianRoot_();
+  var global = {};
+  GLOBAL_COLLECTIONS.forEach(function (c) { global[c] = listDocs_(c).map(plain_); });
+
+  var results = {};
+  global.projects.forEach(function (p) {
+    var parent = 'projects/' + p.id;
+    var cols = {};
+    var entries = 0;
+    PROJECT_COLLECTIONS.forEach(function (c) {
+      cols[c] = query_(parent, c).map(plain_);
+      if (c !== 'days' && c !== 'auditLog') entries += cols[c].length;
+    });
+    var payload = {
+      type: 'bpmc-full-backup',
+      schemaVersion: BPMCCore.CORE_SCHEMA_VERSION,
+      firebaseProject: fsProject_(),
+      project: p,
+      businessDate: date,
+      takenAt: started.toISOString(),
+      reason: why,
+      counts: Object.keys(cols).reduce(function (o, c) { o[c] = cols[c].length; return o; }, {}),
+      note: entries === 0 ? 'Is project mein abhi koi entry nahi — sirf project aur master list ka backup' : null,
+      collections: cols,
+      global: global,
+    };
+    var vault = (p.data.vault || p.data.name || p.id);
+    var folder = folderPath_(root, vault + '/Backup');
+    var file = createNewFile_(folder, date + ' full', '.json', JSON.stringify(payload, null, 1), MimeType.PLAIN_TEXT);
+    results[p.id] = { file: vault + '/Backup/' + file.getName(), bytes: file.getSize(), entries: entries };
+  });
+
+  commit_([{
+    update: {
+      name: fullName_('backupRuns/' + Utilities.formatDate(started, 'Asia/Kolkata', "yyyyMMdd'T'HHmmss")),
+      fields: encFields_({ at: started, businessDate: date, reason: why, ms: new Date() - started, projects: results, ok: true }),
+    },
+  }]);
+  Logger.log('Backup ho gaya: ' + JSON.stringify(results));
+  return results;
 }
 
 // ---------------- pehli baar ka data (bootstrap) ----------------
