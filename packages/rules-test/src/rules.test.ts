@@ -222,6 +222,29 @@ describe("machine log + diesel ek save mein (Phase 2)", () => {
   });
 });
 
+describe("attendance (Phase 2)", () => {
+  it("site user labour muster aur staff haazri audit ke saath bana sake", async () => {
+    const db = dbAs(SITE);
+    const batch = writeBatch(db);
+    const base = { projectId: PID, createdBy: SITE, createdAt: serverTimestamp(), deleted: null, rev: 1, serverStatus: "PENDING" };
+    batch.set(doc(db, `projects/${PID}/labourMuster/M1`), { ...base, lastAuditId: "la1", businessDate: TODAY, contractorId: "suraj", mistri: 3, kuli: 5, reja: 0 });
+    batch.set(doc(db, `projects/${PID}/staffAttendance/S1`), { ...base, lastAuditId: "la2", businessDate: TODAY, staffId: "anil", mark: "P" });
+    batch.set(doc(db, `projects/${PID}/auditLog/la1`), { entity: "labourMuster/M1", action: "CREATE", rev: 1, by: SITE, at: serverTimestamp(), reason: null });
+    batch.set(doc(db, `projects/${PID}/auditLog/la2`), { entity: "staffAttendance/S1", action: "CREATE", rev: 1, by: SITE, at: serverTimestamp(), reason: null });
+    await assertSucceeds(batch.commit());
+  });
+
+  it("staff khata (staffBalances): member padhe, likhe koi nahi — sirf server", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), `projects/${PID}/staffBalances/anil`), { balancePaise: 100 });
+    });
+    await assertSucceeds(getDoc(doc(dbAs(SITE), `projects/${PID}/staffBalances/anil`)));
+    await assertFails(getDoc(doc(dbAs(OTHER), `projects/${PID}/staffBalances/anil`)));
+    await assertFails(setDoc(doc(dbAs(SITE), `projects/${PID}/staffBalances/anil`), { balancePaise: 999999 }));
+    await assertFails(setDoc(doc(dbAs(ADMIN), `projects/${PID}/staffBalances/anil`), { balancePaise: 0 }));
+  });
+});
+
 describe("delete / Recycle Bin", () => {
   it("hard delete kisi ko nahi — Admin ko bhi nahi", async () => {
     await seedEntry("e1", TODAY);

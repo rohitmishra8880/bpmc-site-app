@@ -11,6 +11,8 @@ interface DayDoc {
   stock?: Record<string, DayItemBalance>;
   stockComputedAt?: { toDate(): Date };
   machineTotals?: { running: number; breakdown: number; hours: number; dieselLtr: number };
+  labour?: { totals: { mistri: number; kuli: number; reja: number; total: number } };
+  staff?: { present: number; halfDay: number; absent: number; marked: number };
 }
 
 export function Dashboard() {
@@ -43,11 +45,18 @@ export function Dashboard() {
     <>
       <PageHead title="Dashboard Overview" sub={`${current.name} · ${formatDate(today)} — every number comes from real entries`} />
       <div className="stats">
-        <div className="card stat">
+        <Link className="card stat" to="/attendance">
           <span className="lab">Today's attendance</span>
-          <span className="num">—</span>
-          <span className="foot">Attendance coming in Phase 2</span>
-        </div>
+          <span className="num">
+            {day?.labour || day?.staff ? (day?.labour?.totals.total ?? 0) + (day?.staff ? day.staff.present + day.staff.halfDay : 0) : "—"}
+            {(day?.labour || day?.staff) && <small>people</small>}
+          </span>
+          <span className="foot">
+            {day?.labour || day?.staff
+              ? `${day?.staff ? day.staff.present + day.staff.halfDay : 0} staff · ${day?.labour?.totals.total ?? 0} labour (M ${day?.labour?.totals.mistri ?? 0} · K ${day?.labour?.totals.kuli ?? 0} · R ${day?.labour?.totals.reja ?? 0})`
+              : "No attendance entered today"}
+          </span>
+        </Link>
         <Link className="card stat" to="/inventory">
           <span className="lab">Diesel balance</span>
           <span className="num">

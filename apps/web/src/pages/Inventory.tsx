@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { canEditDate, formatINR, formatQty, toBaseQty, toBusinessDateIST, toPaise, type DayItemBalance, type Unit } from "@bpmc/core";
+import { canEditDate, formatINR, formatQty, formatQtyShort, toBaseQty, toBusinessDateIST, toPaise, type DayItemBalance, type Unit } from "@bpmc/core";
 import { DateBar } from "../components/DateBar";
 import { can, useProfile } from "../lib/auth";
 import { softDeleteWrite, useDay, useDayEntries, useUnlock, writeEntries, type Entry } from "../lib/entries";
@@ -99,8 +99,8 @@ export function Inventory() {
         <section className="card" style={{ padding: 16 }}>
           <b>Stock calculation</b>
           <p style={{ marginTop: 6 }}>
-            {formatQty(bal.opening, 3)} + {formatQty(bal.inward, 3)} − {formatQty(bal.uses, 3)}
-            {bal.adjust ? ` ${bal.adjust > 0 ? "+" : "−"} ${formatQty(Math.abs(bal.adjust), 3)}` : ""} = <b>{formatQty(bal.closing, 3)} {u}</b>
+            {formatQtyShort(bal.opening)} + {formatQtyShort(bal.inward)} − {formatQtyShort(bal.uses)}
+            {bal.adjust ? ` ${bal.adjust > 0 ? "+" : "−"} ${formatQtyShort(Math.abs(bal.adjust))}` : ""} = <b>{formatQtyShort(bal.closing)} {u}</b>
           </p>
           <p className="small muted">Calculated by the server — never typed by hand. Editing a past day updates all later days automatically.</p>
         </section>

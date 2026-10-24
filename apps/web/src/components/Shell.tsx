@@ -26,7 +26,7 @@ const NAV: { group: string | null; items: NavItem[] }[] = [
       { to: "/inventory", ic: "📦", label: "Inventory (Material Hub)" },
       { to: "/store", ic: "🧰", label: "Store Register", soon: "P2" },
       { to: "/machinery", ic: "🔧", label: "Machinery" },
-      { to: "/attendance", ic: "👥", label: "Attendance", soon: "P2" },
+      { to: "/attendance", ic: "👥", label: "Attendance" },
       { to: "/work", ic: "📅", label: "Daily Work", soon: "P2" },
       { to: "/creditors", ic: "📒", label: "Creditors / Party Ledger", soon: "P2" },
       { to: "/reports", ic: "📄", label: "Reports (DPR)", soon: "P3" },

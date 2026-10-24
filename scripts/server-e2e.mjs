@@ -70,6 +70,15 @@ put("projects/KSK/machineLogs/L2", P({ businessDate: today, machineId: "ajax2", 
 put("projects/KSK/machineLogs/L3", P({ businessDate: today, machineId: "poc200", status: "BREAKDOWN", dieselLtr: 0 }));
 put("projects/KSK/machineDeductions/A1", P({ businessDate: today, machineId: "poc200", kind: "OWNER_ADVANCE", amountPaise: 2000000 }));
 
+// Attendance (Phase 2)
+put("masters_staff/anil", { name: "Anil", salaryPaise: 2800000, deleted: null });
+put("projects/KSK/labourMuster/LM1", P({ businessDate: today, contractorId: "COMPANY", mistri: 1, kuli: 1, reja: 3 }));
+put("projects/KSK/labourMuster/LM2", P({ businessDate: today, contractorId: "suraj", mistri: 3, kuli: 5, reja: 0 }));
+put("projects/KSK/labourMuster/LM3", P({ businessDate: today, contractorId: "hemlal", mistri: 2, kuli: 8, reja: 0 }));
+put("projects/KSK/labourMuster/LM4", P({ businessDate: today, contractorId: "hemlal", mistri: 9, kuli: 9, reja: 9, deleted: { by: "x", reason: "galti" } }));
+put("projects/KSK/staffAttendance/SA1", P({ businessDate: today, staffId: "anil", mark: "P" }));
+put("projects/KSK/staffPassbook/SP1", P({ businessDate: today, staffId: "anil", kind: "ADVANCE", amountPaise: 200000 }));
+
 // ---- chalao ----
 S.runHisab();
 
@@ -98,6 +107,12 @@ expect("Hataayi udhaar entry ka bill nahi bana", get("projects/KSK/ledger/sm_c1"
 const statuses = ["stockMoves/d2", "machineLogs/L1", "machineDeductions/A1"].map((p) => get(`projects/KSK/${p}`).data.serverStatus);
 expect("Entries DONE", statuses, ["DONE", "DONE", "DONE"]);
 expect("serverRuns record bana", S.listDocs_("serverRuns").length >= 1, true);
+expect("Labour: 6 Mistri / 14 Kuli / 3 Reja = 23 (hataayi entry nahi gini)", day.labour?.totals, { mistri: 6, kuli: 14, reja: 3, total: 23 });
+expect("Labour: Suraj 8", day.labour?.byContractor?.suraj?.total, 8);
+expect("Staff aaj: 1 present", day.staff, { present: 1, halfDay: 0, absent: 0, marked: 1 });
+const kh = get("projects/KSK/staffBalances/anil")?.data;
+expect("Anil khata: ₹933.33 kamai − ₹2,000 advance = −₹1,066.67", [kh?.earnedPaise, kh?.paidPaise, kh?.balancePaise], [93333, 200000, -106667]);
+expect("Attendance entries DONE", ["labourMuster/LM2", "staffAttendance/SA1", "staffPassbook/SP1"].map((p) => get(`projects/KSK/${p}`).data.serverStatus), ["DONE", "DONE", "DONE"]);
 
 console.log(fails ? `\n${fails} jaanch FAIL` : "\nSab server jaanch pass");
 process.exit(fails ? 1 : 0);

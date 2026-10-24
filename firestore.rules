@@ -213,6 +213,11 @@ service cloud.firestore {
         allow read: if member(pid);
         allow write: if false;
       }
+      // Staff ka khata (kamai − diya) — server ka hisab
+      match /staffBalances/{staffId} {
+        allow read: if member(pid);
+        allow write: if false;
+      }
       match /dpr/{date}/{rest=**} {
         allow read: if member(pid);
         allow write: if false;

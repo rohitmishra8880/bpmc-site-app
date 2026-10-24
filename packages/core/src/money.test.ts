@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatINR, formatQty, roundHalfUp, toPaise } from "./money";
+import { formatINR, formatQty, formatQtyShort, roundHalfUp, toPaise } from "./money";
 
 describe("paisa", () => {
   it("₹ Indian format: 5,98,950.00 (T3)", () => {
@@ -17,6 +17,17 @@ describe("paisa", () => {
     expect(toPaise(0.1) + toPaise(0.2)).toBe(30);
     expect(toPaise(1.005)).toBe(101);
     expect(roundHalfUp(-2.5)).toBe(-3);
+  });
+
+  it("stock hisab ke number saaf: 0 + 200 − 0 (faltu .000 nahi)", () => {
+    expect(formatQtyShort(0)).toBe("0");
+    expect(formatQtyShort(200)).toBe("200");
+    expect(formatQtyShort(12.5)).toBe("12.5");
+    expect(formatQtyShort(48.15)).toBe("48.15");
+    expect(formatQtyShort(2.425)).toBe("2.425");
+    expect(formatQtyShort(1000)).toBe("1,000");
+    expect(formatQtyShort(100000.1)).toBe("1,00,000.1");
+    expect(formatQtyShort(-0.3)).toBe("−0.3");
   });
 
   it("quantity format", () => {

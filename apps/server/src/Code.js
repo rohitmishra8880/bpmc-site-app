@@ -135,14 +135,19 @@ function runHisab() {
       var pStock = query_(parent, 'stockMoves', 'serverStatus', ENTRY_STATUS_PENDING);
       var pLogs = query_(parent, 'machineLogs', 'serverStatus', ENTRY_STATUS_PENDING);
       var pDeds = query_(parent, 'machineDeductions', 'serverStatus', ENTRY_STATUS_PENDING);
-      if (!pStock.length && !pLogs.length && !pDeds.length) return;
+      var pMuster = query_(parent, 'labourMuster', 'serverStatus', ENTRY_STATUS_PENDING);
+      var pStaff = query_(parent, 'staffAttendance', 'serverStatus', ENTRY_STATUS_PENDING);
+      var pPass = query_(parent, 'staffPassbook', 'serverStatus', ENTRY_STATUS_PENDING);
+      var all = pStock.concat(pLogs, pDeds, pMuster, pStaff, pPass);
+      if (!all.length) return;
       var out = {};
       if (pStock.length) {
         out.stock = hisabStock_(parent, pStock, ctx);
         out.udhaar = hisabUdhaar_(parent, p.id, pStock);
       }
       if (pLogs.length || pDeds.length) out.machines = hisabMachines_(parent, pLogs, pDeds, ctx);
-      out.notMarked = markDone_(pStock.concat(pLogs, pDeds));
+      if (pMuster.length || pStaff.length || pPass.length) out.attendance = hisabAttendance_(parent, pMuster, pStaff, pPass, ctx);
+      out.notMarked = markDone_(all);
       log.projects[p.id] = out;
     });
   } catch (e) {
@@ -257,6 +262,14 @@ function hisabMachines_(parent, pLogs, pDeds, ctx) {
   if (!ctx.machines) {
     ctx.machines = {};
     listDocs_('masters_machines').forEach(function (m) { ctx.machines[m.id] = m.data; });
+  }
+  loadSettings_(ctx);
+  return hisabMachinesInner_(parent, pLogs, pDeds, ctx);
+}
+
+/** settings/global.rental ek baar padho (machine bill aur staff din-rate dono ke liye) */
+function loadSettings_(ctx) {
+  if (!ctx.rental) {
     var g = getDoc_('settings/global');
     var r = g && g.data.rental || {};
     ctx.rental = {
@@ -264,6 +277,9 @@ function hisabMachines_(parent, pLogs, pDeds, ctx) {
       idleDayFactor: r.idleDayFactor || 0, monthDivisor: r.monthDivisor || 30,
     };
   }
+}
+
+function hisabMachinesInner_(parent, pLogs, pDeds, ctx) {
   var dates = {};
   var months = {};
   pLogs.forEach(function (d) { if (d.data.businessDate) { dates[d.data.businessDate] = 1; months[d.data.businessDate.slice(0, 7)] = 1; } });
@@ -343,6 +359,84 @@ function hisabMachines_(parent, pLogs, pDeds, ctx) {
   });
   if (writes.length) commit_(writes);
   return { dates: Object.keys(dates).length, bills: bills };
+}
+
+/**
+ * Haazri: days/{date}.labour (thekedar-wise Mistri / Kuli / Reja), days/{date}.staff (P / HD / A gin-ti),
+ * aur jis staff ki haazri / khata badla uska poora khata → staffBalances/{staffId}.
+ */
+function hisabAttendance_(parent, pMuster, pStaff, pPass, ctx) {
+  var writes = [];
+  var musterDates = {};
+  pMuster.forEach(function (d) { if (d.data.businessDate) musterDates[d.data.businessDate] = 1; });
+  Object.keys(musterDates).forEach(function (date) {
+    var latest = latestBy_(query_(parent, 'labourMuster', 'businessDate', date), 'contractorId');
+    var entries = Object.keys(latest).map(function (k) {
+      var m = latest[k].data;
+      return { contractorId: m.contractorId, mistri: Number(m.mistri) || 0, kuli: Number(m.kuli) || 0, reja: Number(m.reja) || 0 };
+    });
+    var labour = BPMCCore.labourDay(entries);
+    writes.push({
+      update: { name: fullName_(parent + '/days/' + date), fields: { labour: enc_(labour), date: enc_(date) } },
+      updateMask: { fieldPaths: ['labour', 'date'] },
+      updateTransforms: [{ fieldPath: 'labourComputedAt', setToServerValue: 'REQUEST_TIME' }],
+    });
+  });
+
+  var staffDates = {};
+  var staffIds = {};
+  pStaff.forEach(function (d) { if (d.data.businessDate) staffDates[d.data.businessDate] = 1; if (d.data.staffId) staffIds[d.data.staffId] = 1; });
+  pPass.forEach(function (d) { if (d.data.staffId) staffIds[d.data.staffId] = 1; });
+  Object.keys(staffDates).forEach(function (date) {
+    var latest = latestBy_(query_(parent, 'staffAttendance', 'businessDate', date), 'staffId');
+    var c = { present: 0, halfDay: 0, absent: 0, marked: 0 };
+    Object.keys(latest).forEach(function (k) {
+      var mk = latest[k].data.mark;
+      c.marked++;
+      if (mk === 'P') c.present++;
+      else if (mk === 'HD') c.halfDay++;
+      else c.absent++;
+    });
+    writes.push({
+      update: { name: fullName_(parent + '/days/' + date), fields: { staff: enc_(c), date: enc_(date) } },
+      updateMask: { fieldPaths: ['staff', 'date'] },
+    });
+  });
+
+  Object.keys(staffIds).forEach(function (sid) {
+    var master = getDoc_('masters_staff/' + sid);
+    var perDay = {};
+    query_(parent, 'staffAttendance', 'staffId', sid).forEach(function (d) {
+      if (d.data.deleted) return;
+      var cur = perDay[d.data.businessDate];
+      if (!cur || d.updateTime > cur.updateTime) perDay[d.data.businessDate] = d;
+    });
+    var attendance = Object.keys(perDay).map(function (k) { return { businessDate: k, mark: perDay[k].data.mark }; });
+    var payments = query_(parent, 'staffPassbook', 'staffId', sid).map(function (d) {
+      return { businessDate: d.data.businessDate, kind: d.data.kind, amountPaise: d.data.amountPaise || 0, deleted: !!d.data.deleted };
+    });
+    loadSettings_(ctx);
+    var k = BPMCCore.staffKhata({ salaryPaise: master && master.data.salaryPaise != null ? master.data.salaryPaise : null, attendance: attendance, payments: payments, divisor: ctx.rental.monthDivisor });
+    k.staffName = master ? master.data.name : sid;
+    k.salaryPaise = master ? master.data.salaryPaise || null : null;
+    writes.push({
+      update: { name: fullName_(parent + '/staffBalances/' + sid), fields: encFields_(k) },
+      updateTransforms: [{ fieldPath: 'computedAt', setToServerValue: 'REQUEST_TIME' }],
+    });
+  });
+  if (writes.length) commit_(writes);
+  return { musterDays: Object.keys(musterDates).length, staffDays: Object.keys(staffDates).length, staff: Object.keys(staffIds).length };
+}
+
+/** Har key (thekedar / staff) ki sabse nayi, na-hataayi entry */
+function latestBy_(docs, key) {
+  var out = {};
+  docs.forEach(function (d) {
+    if (d.data.deleted || !d.data[key]) return;
+    var cur = out[d.data[key]];
+    if (!cur || d.updateTime > cur.updateTime) out[d.data[key]] = d;
+  });
+  return out;
 }
 
 /** Ek machine ke ek din mein ek hi log gino (offline se do ban gaye to sabse naya) */

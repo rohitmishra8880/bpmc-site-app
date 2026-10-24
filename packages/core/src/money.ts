@@ -35,6 +35,11 @@ export function formatINR(paise: Paise, withSymbol = true): string {
   return `${neg ? "−" : ""}${withSymbol ? "₹" : ""}${groupIndian(rupees)}.${p}`;
 }
 
+/** Stock hisab ke liye saaf number: 200 → "200", 12.5 → "12.5", 100000.1 → "1,00,000.1" (3 decimal tak, faltu 0 nahi) */
+export function formatQtyShort(n: number): string {
+  return formatQty(n, 3).replace(/\.?0+$/, "");
+}
+
 /** Quantity Indian format mein: 1234567.5 → "12,34,567.50" */
 export function formatQty(n: number, decimals = 2): string {
   const neg = n < 0;

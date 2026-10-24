@@ -3,6 +3,7 @@ import { Shell, Soon } from "./components/Shell";
 import { AuthProvider, useAuth } from "./lib/auth";
 import { ProjectProvider } from "./lib/projects";
 import { ToastProvider } from "./lib/ui";
+import { Attendance } from "./pages/Attendance";
 import { Dashboard } from "./pages/Dashboard";
 import { EditHistory } from "./pages/EditHistory";
 import { Inventory } from "./pages/Inventory";
@@ -31,7 +32,7 @@ function Gate() {
           <Route path="inventory" element={<Inventory />} />
           <Route path="store" element={<Soon title="Store Register" phase="Phase 2" what="Tools and materials — received, issued to contractors, returned" />} />
           <Route path="machinery" element={<Machinery />} />
-          <Route path="attendance" element={<Soon title="Attendance" phase="Phase 2" what="Staff KYC + ledger, contractor muster (Mistri / Kuli / Reja)" />} />
+          <Route path="attendance" element={<Attendance />} />
           <Route path="work" element={<Soon title="Daily Work" phase="Phase 2" what="Concrete M³, shuttering Sq M, steel Kg, photos" />} />
           <Route path="creditors" element={<Soon title="Creditors / Party Ledger" phase="Phase 2" what="Bills, payments, outstanding" />} />
           <Route path="reports" element={<Soon title="Reports (DPR)" phase="Phase 3" what="Daily DPR — lock, versions, PDF, WhatsApp, Obsidian" />} />
