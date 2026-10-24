@@ -239,22 +239,62 @@ describe("Admin ke kaam", () => {
   });
 });
 
-describe("masters (material / Oil & Lubricants)", () => {
-  const oil = { name: "Engine Oil 15W-40", group: "Oil & Lubricants", baseUnit: "Ltr", createdBy: SITE, deleted: null };
+/** Master + global audit ek batch mein (web app ka saveMaster isi tarah likhta hai) */
+function writeMaster(db: Firestore, email: string, id: string, data: Record<string, unknown>, rev: number, action: string, opts: { withAudit?: boolean; reason?: string | null } = {}) {
+  const auditId = `g${++auditSeq}`;
+  const batch = writeBatch(db);
+  const ref = doc(db, `masters_materials/${id}`);
+  const base = { ...data, rev, lastAuditId: auditId, updatedBy: email };
+  if (action === "CREATE") batch.set(ref, { ...base, createdBy: email, deleted: null });
+  else batch.update(ref, base);
+  if (opts.withAudit !== false) {
+    batch.set(doc(db, `auditLog/${auditId}`), {
+      entity: `masters_materials/${id}`,
+      action,
+      rev,
+      by: email,
+      at: serverTimestamp(),
+      reason: opts.reason !== undefined ? opts.reason : action === "CREATE" ? null : "galat naam",
+    });
+  }
+  return batch.commit();
+}
 
-  it("site user item jod / badal sake", async () => {
+describe("masters (material / Oil & Lubricants)", () => {
+  const oil = { name: "Engine Oil 15W-40", group: "OIL", baseUnit: "Ltr" };
+
+  it("site user item jod / badal sake (audit ke saath)", async () => {
     const db = dbAs(SITE);
-    await assertSucceeds(setDoc(doc(db, "masters_materials/oil1"), oil));
-    await assertSucceeds(updateDoc(doc(db, "masters_materials/oil1"), { name: "Engine Oil 20W-40", updatedBy: SITE }));
+    await assertSucceeds(writeMaster(db, SITE, "oil1", oil, 1, "CREATE"));
+    await assertSucceeds(writeMaster(db, SITE, "oil1", { name: "Engine Oil 20W-40" }, 2, "UPDATE"));
+  });
+
+  it("audit ke bina master nahi", async () => {
+    await assertFails(writeMaster(dbAs(SITE), SITE, "oil1", oil, 1, "CREATE", { withAudit: false }));
+  });
+
+  it("badalne ka kaaran zaroori", async () => {
+    const db = dbAs(SITE);
+    await writeMaster(db, SITE, "oil1", oil, 1, "CREATE");
+    await assertFails(writeMaster(db, SITE, "oil1", { name: "x" }, 2, "UPDATE", { reason: "" }));
   });
 
   it("delete sirf soft, reason ke saath; wapas sirf Admin", async () => {
     const db = dbAs(SITE);
-    await setDoc(doc(db, "masters_materials/oil1"), oil);
+    await writeMaster(db, SITE, "oil1", oil, 1, "CREATE");
     await assertFails(deleteDoc(doc(db, "masters_materials/oil1")));
-    await assertFails(updateDoc(doc(db, "masters_materials/oil1"), { deleted: { reason: "" }, updatedBy: SITE }));
-    await assertSucceeds(updateDoc(doc(db, "masters_materials/oil1"), { deleted: { reason: "galat naam se bana" }, updatedBy: SITE }));
-    await assertFails(updateDoc(doc(db, "masters_materials/oil1"), { deleted: null, updatedBy: SITE }));
-    await assertSucceeds(updateDoc(doc(dbAs(ADMIN), "masters_materials/oil1"), { deleted: null, updatedBy: ADMIN }));
+    await assertFails(writeMaster(db, SITE, "oil1", { deleted: { reason: "" } }, 2, "DELETE"));
+    await assertSucceeds(writeMaster(db, SITE, "oil1", { deleted: { reason: "galat naam se bana" } }, 2, "DELETE", { reason: "galat naam se bana" }));
+    await assertFails(writeMaster(db, SITE, "oil1", { deleted: null }, 3, "RESTORE"));
+    await assertSucceeds(writeMaster(dbAs(ADMIN), ADMIN, "oil1", { deleted: null }, 3, "RESTORE"));
+  });
+
+  it("global audit koi badal / mita nahi sakta; site user padh nahi sakta", async () => {
+    await writeMaster(dbAs(SITE), SITE, "oil1", oil, 1, "CREATE");
+    const ref = `auditLog/g${auditSeq}`;
+    await assertFails(getDoc(doc(dbAs(SITE), ref)));
+    await assertSucceeds(getDoc(doc(dbAs(ADMIN), ref)));
+    await assertFails(updateDoc(doc(dbAs(ADMIN), ref), { reason: "badla" }));
+    await assertFails(deleteDoc(doc(dbAs(ADMIN), ref)));
   });
 });

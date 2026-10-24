@@ -79,10 +79,23 @@ service cloud.firestore {
       allow read: if isActiveUser();
       allow write: if isAdmin();
     }
+    // Global audit: masters, users, projects ke badlav (sirf naya; koi badal / mita nahi sakta)
     match /auditLog/{id} {
-      allow read: if isAdmin();
-      allow create: if isAdmin() && request.resource.data.by == email() && request.resource.data.at == request.time;
+      allow read: if can('audit.read');
+      allow create: if isActiveUser()
+        && request.resource.data.by == email()
+        && request.resource.data.at == request.time
+        && request.resource.data.action in ['CREATE', 'UPDATE', 'DELETE', 'RESTORE']
+        && (request.resource.data.action == 'CREATE'
+            || (request.resource.data.reason is string && request.resource.data.reason.size() >= 3));
       allow update, delete: if false;
+    }
+    function globalAuditOk(col, docId) {
+      let a = getAfter(/databases/$(database)/documents/auditLog/$(request.resource.data.lastAuditId)).data;
+      return existsAfter(/databases/$(database)/documents/auditLog/$(request.resource.data.lastAuditId))
+        && a.entity == col + '/' + docId
+        && a.rev == request.resource.data.rev
+        && a.by == email();
     }
 
     // Masters: masters_materials, masters_machines, masters_contractors, masters_parties, masters_storeItems, masters_staff
@@ -93,10 +106,14 @@ service cloud.firestore {
       allow read: if isMaster() && isActiveUser();
       allow create: if isMaster() && can('masters.edit')
         && request.resource.data.createdBy == email()
-        && request.resource.data.deleted == null;
+        && request.resource.data.deleted == null
+        && request.resource.data.rev == 1
+        && globalAuditOk(col, id);
       allow update: if isMaster() && can('masters.edit')
         && request.resource.data.createdBy == resource.data.createdBy
         && request.resource.data.updatedBy == email()
+        && request.resource.data.rev == resource.data.rev + 1
+        && globalAuditOk(col, id)
         // soft-delete ke liye reason zaroori; wapas laana sirf Admin
         && (request.resource.data.deleted == null
               ? (resource.data.deleted == null || can('recycle.restore'))
