@@ -1,4 +1,4 @@
-﻿# BPMC Site App — Master Plan v3 (24 Oct 2026)
+# BPMC Site App — Master Plan v3 (24 Oct 2026)
 
 > Status: **DRAFT v3 — Rohit ke final OK ka intezaar.** OK tak koi app code nahi (CLAUDE.md T7.1).
 > "Pakka" = tay / tested. "Andaza" = Phase 0 mein verify karna hai.
