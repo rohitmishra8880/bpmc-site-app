@@ -44,7 +44,7 @@ const NAV: { group: string | null; items: NavItem[] }[] = [
     items: [
       { to: "/users", ic: "🛡️", label: "Users & Roles", adminOnly: true },
       { to: "/history", ic: "🕘", label: "Edit History", perm: "audit.read" },
-      { to: "/bin", ic: "🗑️", label: "Recycle Bin", perm: "recycle.restore", soon: "P2" },
+      { to: "/bin", ic: "🗑️", label: "Recycle Bin", perm: "recycle.restore" },
       { to: "/settings", ic: "⚙️", label: "Settings & Backup", adminOnly: true },
     ],
   },

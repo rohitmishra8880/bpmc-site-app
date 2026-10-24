@@ -1,4 +1,4 @@
-# BPMC Site App — Master Plan v3 (24 Oct 2026)
+﻿# BPMC Site App — Master Plan v3 (24 Oct 2026)
 
 > Status: **DRAFT v3 — Rohit ke final OK ka intezaar.** OK tak koi app code nahi (CLAUDE.md T7.1).
 > "Pakka" = tay / tested. "Andaza" = Phase 0 mein verify karna hai.
@@ -24,7 +24,8 @@
 - ✅ Server (Apps Script): core bundle, Firestore REST, `runHisab` (har 5 min, stock → days/), `bootstrapPhase1`, `installTriggers`
 - ✅ Rohit ne bootstrap + triggers chalaye, Google login test par chala (24 Oct, 13:52)
 - ✅ Settings & Backup screen; `dailyBackup` (roz ~11:30 IST) → har vault ka `Backup\<date> full.json`, same naam ho to v2, likh ke padh ke jaanch
-- ⏳ Baaki: GitHub Actions doosri copy, restore (preview → OK), migration framework, Recycle Bin page
+- ✅ Recycle Bin page + Admin 'din kholo'; restore (restorePreview → RESTORE_CONFIRM → restoreRun, pehle backup); migration (core planMigration/verifyMigration + server runner); GitHub Actions encrypted doosri copy (secrets baaki)
+- ⏳ Baaki: Rohit ke GitHub secrets; ek asli restore test
 
 ## Phase 0 — haal (24 Oct 2026) ✅
 - Repo: https://github.com/rohitmishra8880/bpmc-site-app (private) — commit `c2abce3`

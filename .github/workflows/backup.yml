@@ -1,0 +1,36 @@
+# Roz ki doosri backup copy (PLAN.md §5 parat C) — laptop / Google Drive se alag.
+# Secrets (GitHub → Settings → Secrets → Actions): GCP_SA_KEY, BACKUP_PASSPHRASE
+name: Firestore backup (test)
+
+on:
+  schedule:
+    - cron: "15 18 * * *" # 23:45 IST
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Firestore padho + encrypt
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+          FIREBASE_PROJECT_ID: bpmc-site-test
+        run: |
+          OUT="bpmc-test-$(TZ=Asia/Kolkata date +%Y-%m-%d_%H%M).json.enc"
+          echo "OUT=$OUT" >> "$GITHUB_ENV"
+          OUT="$OUT" node scripts/backup-firestore.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.OUT }}
+          path: ${{ env.OUT }}
+          retention-days: 90
+          if-no-files-found: error

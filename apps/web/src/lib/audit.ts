@@ -28,6 +28,38 @@ function diff(before: DocumentData | null, after: DocumentData): { before: Docum
   return { before: b, after: a };
 }
 
+/** Site entry (projects/{pid}/{col}) ko Recycle Bin se wapas — project auditLog ke saath */
+export async function restoreEntry(pid: string, col: string, id: string, rev: number, email: string, reason: string) {
+  const batch = writeBatch(db);
+  const auditRef = doc(collection(db, "projects", pid, "auditLog"));
+  batch.update(doc(db, "projects", pid, col, id), {
+    deleted: null,
+    rev: rev + 1,
+    lastAuditId: auditRef.id,
+    updatedBy: email,
+    updatedAt: serverTimestamp(),
+    serverStatus: "PENDING",
+  });
+  batch.set(auditRef, { entity: `${col}/${id}`, action: "RESTORE", rev: rev + 1, by: email, at: serverTimestamp(), reason, device: deviceLabel() });
+  await batch.commit();
+}
+
+/** Admin: locked din kholna (expiresAt tak) — Edit History mein OPEN ke roop mein */
+export async function unlockDay(pid: string, date: string, expiresAt: Date, email: string, reason: string) {
+  const batch = writeBatch(db);
+  batch.set(doc(db, "projects", pid, "unlocks", date), { by: email, reason, expiresAt, at: serverTimestamp() });
+  batch.set(doc(collection(db, "projects", pid, "auditLog")), {
+    entity: `unlocks/${date}`,
+    action: "OPEN",
+    rev: 1,
+    by: email,
+    at: serverTimestamp(),
+    reason: `Din khola ${expiresAt.toLocaleString("en-IN")} tak — ${reason}`,
+    device: deviceLabel(),
+  });
+  await batch.commit();
+}
+
 /**
  * Master list (global) ko likho + global auditLog mein record.
  * `current` = abhi ka document (naya ho to null).

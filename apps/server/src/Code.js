@@ -338,6 +338,164 @@ function bootstrapPhase1() {
   Logger.log('Pehle se the (chhue nahi): ' + paths.filter(function (p) { return created.indexOf(p) < 0; }).join(', '));
 }
 
+// ---------------- restore (kisi din ka data wapas) ----------------
+// Kaise chalayein (Apps Script editor):
+//   1. Project Settings → Script properties: RESTORE_PROJECT = KSK, RESTORE_FILE = 2026-10-24 full.json
+//   2. restorePreview chalao → log mein dekho kya badlega
+//   3. Theek lage to RESTORE_CONFIRM = KSK/2026-10-24 full.json likho, phir restoreRun chalao
+// restoreRun pehle naya backup leta hai. Backup ke baad bani entry delete nahi hoti — soft-delete (Recycle Bin).
+// auditLog aur days/ ko chhuta nahi (days server dobara banata hai).
+
+var RESTORE_COLLECTIONS = ['stockMoves', 'machineLogs', 'machineDeductions', 'labourMuster', 'staffAttendance', 'staffPassbook',
+  'workEntries', 'storeMoves', 'ledger', 'photos'];
+
+function restoreInput_() {
+  var props = PropertiesService.getScriptProperties();
+  var pid = props.getProperty('RESTORE_PROJECT');
+  var fileName = props.getProperty('RESTORE_FILE');
+  if (!pid || !fileName) throw new Error('Script properties RESTORE_PROJECT aur RESTORE_FILE set karo');
+  var p = getDoc_('projects/' + pid);
+  if (!p) throw new Error('Project ' + pid + ' nahi mila');
+  var folder = folderPath_(obsidianRoot_(), (p.data.vault || p.data.name) + '/Backup');
+  var it = folder.getFilesByName(fileName);
+  if (!it.hasNext()) throw new Error('Backup file nahi mili: ' + fileName);
+  var backup = JSON.parse(it.next().getBlob().getDataAsString());
+  if (backup.type !== 'bpmc-full-backup' || backup.project.id !== pid) throw new Error('Yeh file is project ka backup nahi hai');
+  return { pid: pid, fileName: fileName, backup: backup, props: props };
+}
+
+/** Backup JSON mein samay ISO string ban jaata hai — wapas Timestamp banao ("2026-10-24" jaisi tarikh string hi rahe) */
+function reviveDates_(v) {
+  if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/.test(v)) return new Date(v);
+  if (Array.isArray(v)) return v.map(reviveDates_);
+  if (v && typeof v === 'object') {
+    Object.keys(v).forEach(function (k) { v[k] = reviveDates_(v[k]); });
+  }
+  return v;
+}
+
+function restorePlan_(input) {
+  var parent = 'projects/' + input.pid;
+  var plan = { put: [], softDelete: [], same: 0, perCol: {} };
+  RESTORE_COLLECTIONS.forEach(function (c) {
+    var old = {};
+    (input.backup.collections[c] || []).forEach(function (d) { old[d.id] = d; });
+    var nowDocs = query_(parent, c);
+    var now = {};
+    nowDocs.forEach(function (d) { now[d.id] = d; });
+    var stat = { wapas: 0, recycleBin: 0, same: 0 };
+    Object.keys(old).forEach(function (id) {
+      var cur = now[id];
+      if (cur && JSON.stringify(cur.data) === JSON.stringify(old[id].data)) { stat.same++; plan.same++; return; }
+      plan.put.push({ path: parent + '/' + c + '/' + id, col: c, id: id, data: old[id].data, cur: cur });
+      stat.wapas++;
+    });
+    nowDocs.forEach(function (d) {
+      if (!old[d.id] && !d.data.deleted) { plan.softDelete.push({ path: parent + '/' + c + '/' + d.id, col: c, id: d.id, cur: d }); stat.recycleBin++; }
+    });
+    plan.perCol[c] = stat;
+  });
+  return plan;
+}
+
+function restorePreview() {
+  var input = restoreInput_();
+  var plan = restorePlan_(input);
+  Logger.log('Restore preview — ' + input.pid + ' ← ' + input.fileName + ' (backup: ' + input.backup.takenAt + ')');
+  Logger.log('Backup wali value wapas: ' + plan.put.length + ' · backup ke baad bani → Recycle Bin: ' + plan.softDelete.length + ' · same: ' + plan.same);
+  Logger.log(JSON.stringify(plan.perCol));
+  Logger.log('Theek lage to Script property RESTORE_CONFIRM = ' + input.pid + '/' + input.fileName + ' set karke restoreRun chalao.');
+}
+
+function restoreRun() {
+  var input = restoreInput_();
+  var want = input.pid + '/' + input.fileName;
+  if (input.props.getProperty('RESTORE_CONFIRM') !== want) throw new Error('Pehle restorePreview dekho, phir RESTORE_CONFIRM = ' + want);
+  dailyBackup('restore se pehle (' + want + ')');
+  var plan = restorePlan_(input);
+  var now = new Date();
+  var who = Session.getActiveUser().getEmail() || 'server-restore';
+  var reason = 'Backup ' + input.fileName + ' se wapas (' + who + ')';
+  var writes = [];
+  function audit(col, id, rev) {
+    var aid = 'restore-' + Utilities.getUuid();
+    writes.push({ update: { name: fullName_('projects/' + input.pid + '/auditLog/' + aid), fields: encFields_({ entity: col + '/' + id, action: 'RESTORE', rev: rev, by: who, at: now, reason: reason, device: 'Apps Script' }) } });
+    return aid;
+  }
+  plan.put.forEach(function (x) {
+    var rev = (x.cur && x.cur.data.rev || x.data.rev || 1) + 1;
+    var data = reviveDates_(JSON.parse(JSON.stringify(x.data)));
+    data.rev = rev;
+    data.serverStatus = 'PENDING';
+    data.lastAuditId = audit(x.col, x.id, rev);
+    data.updatedBy = who;
+    data.updatedAt = now;
+    writes.push({ update: { name: fullName_(x.path), fields: encFields_(data) } });
+  });
+  plan.softDelete.forEach(function (x) {
+    var rev = (x.cur.data.rev || 1) + 1;
+    writes.push({
+      update: { name: fullName_(x.path), fields: encFields_({ deleted: { by: who, reason: reason, at: now }, rev: rev, serverStatus: 'PENDING', lastAuditId: audit(x.col, x.id, rev), updatedBy: who, updatedAt: now }) },
+      updateMask: { fieldPaths: ['deleted', 'rev', 'serverStatus', 'lastAuditId', 'updatedBy', 'updatedAt'] },
+    });
+  });
+  commit_(writes);
+  input.props.deleteProperty('RESTORE_CONFIRM');
+  Logger.log('Restore ho gaya: ' + plan.put.length + ' wapas, ' + plan.softDelete.length + ' Recycle Bin mein. Hisab agle runHisab mein dobara banega.');
+}
+
+// ---------------- migration ----------------
+// Naya migration yahan jodo (BPMCCore.Migration jaisa). Chalane ka tareeka restore jaisa:
+//   MIGRATION_ID set karo → migrationPreview → MIGRATION_CONFIRM = wahi id → migrationRun
+var MIGRATIONS = [];
+
+function migrationInput_() {
+  var props = PropertiesService.getScriptProperties();
+  var id = props.getProperty('MIGRATION_ID');
+  var m = MIGRATIONS.filter(function (x) { return x.id === id; })[0];
+  if (!m) throw new Error('MIGRATION_ID "' + id + '" MIGRATIONS list mein nahi hai');
+  var docs = [];
+  m.collections.forEach(function (c) {
+    if (c.indexOf('projects/*/') === 0) {
+      listDocs_('projects').forEach(function (p) {
+        query_('projects/' + p.id, c.slice(11)).forEach(function (d) { docs.push({ path: 'projects/' + p.id + '/' + c.slice(11) + '/' + d.id, data: d.data, updateTime: d.updateTime }); });
+      });
+    } else {
+      listDocs_(c).forEach(function (d) { docs.push({ path: c + '/' + d.id, data: d.data, updateTime: d.updateTime }); });
+    }
+  });
+  return { m: m, docs: docs, props: props };
+}
+
+function migrationPreview() {
+  var x = migrationInput_();
+  var plan = BPMCCore.planMigration(x.m, x.docs);
+  Logger.log(x.m.id + ' — ' + x.m.describe);
+  Logger.log('Dekhe: ' + plan.scanned + ' · badlenge: ' + plan.changes.length + ' · pehle se naye: ' + plan.alreadyDone + ' · galti: ' + plan.errors.length);
+  plan.changes.slice(0, 5).forEach(function (c) { Logger.log(c.path + ': ' + JSON.stringify(c.before) + ' → ' + JSON.stringify(c.after)); });
+  plan.errors.forEach(function (e) { Logger.log('GALTI ' + e.path + ': ' + e.error); });
+}
+
+function migrationRun() {
+  var x = migrationInput_();
+  if (x.props.getProperty('MIGRATION_CONFIRM') !== x.m.id) throw new Error('Pehle migrationPreview dekho, phir MIGRATION_CONFIRM = ' + x.m.id);
+  if (getDoc_('migrations/' + x.m.id)) throw new Error(x.m.id + ' pehle hi chal chuka hai');
+  var plan = BPMCCore.planMigration(x.m, x.docs);
+  if (plan.errors.length) throw new Error(plan.errors.length + ' document mein galti — migration nahi chalega. migrationPreview dekho.');
+  dailyBackup('migration ' + x.m.id + ' se pehle');
+  var times = {};
+  x.docs.forEach(function (d) { times[d.path] = d.updateTime; });
+  commit_(plan.changes.map(function (c) {
+    return { update: { name: fullName_(c.path), fields: encFields_(c.after) }, currentDocument: { updateTime: times[c.path] } };
+  }));
+  var after = migrationInput_().docs;
+  var check = BPMCCore.verifyMigration(plan, after);
+  commit_([{ update: { name: fullName_('migrations/' + x.m.id), fields: encFields_({ at: new Date(), describe: x.m.describe, scanned: plan.scanned, changed: plan.changes.length, ok: check.ok, problems: check.problems }) } }]);
+  x.props.deleteProperty('MIGRATION_CONFIRM');
+  if (!check.ok) throw new Error('Migration ke baad jaanch fail: ' + check.problems.join('; ') + ' — backup Obsidian vault mein hai, restore karo');
+  Logger.log('Migration ' + x.m.id + ' ho gaya aur jaanch pass: ' + plan.changes.length + ' badle');
+}
+
 /** Phase 0 ka connection check — ab bhi kaam ka */
 function phase0Ping() {
   var r = fsCall_('get', '/_health/ping');

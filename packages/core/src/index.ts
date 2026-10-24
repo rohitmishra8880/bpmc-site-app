@@ -10,3 +10,4 @@ export * from "./stock";
 export * from "./ledger";
 export * from "./rental";
 export * from "./validate";
+export * from "./migrate";
