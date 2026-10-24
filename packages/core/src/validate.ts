@@ -43,6 +43,12 @@ export function normalizeMobile(raw: string): string | null {
   return /^[6-9]\d{9}$/.test(d) ? d : null;
 }
 
+/** Bank account no.: Indian bank 9–18 ank. Space / dash hata ke sirf ank, galat ho to null. */
+export function normalizeBankAccount(raw: string): string | null {
+  const d = raw.replace(/[\s-]/g, "");
+  return /^\d{9,18}$/.test(d) ? d : null;
+}
+
 /** IFSC: 4 akshar bank + 0 + 6 branch, jaise SBIN0001842 */
 export function isIfsc(raw: string): boolean {
   return /^[A-Z]{4}0[A-Z0-9]{6}$/.test(raw.trim().toUpperCase());

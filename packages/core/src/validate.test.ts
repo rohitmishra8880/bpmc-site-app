@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkGstin, gstinCheckChar, isIfsc, normalizeMobile } from "./validate";
+import { checkGstin, gstinCheckChar, isIfsc, normalizeBankAccount, normalizeMobile } from "./validate";
 
 describe("GSTIN (T3)", () => {
   it("jaana-maana sahi GSTIN pass", () => {
@@ -36,6 +36,15 @@ describe("mobile aur IFSC", () => {
     expect(normalizeMobile("09826123456")).toBe("9826123456");
     expect(normalizeMobile("1800123456")).toBeNull(); // purane app ka +1 800 jaisa
     expect(normalizeMobile("98261")).toBeNull();
+  });
+
+  it("bank account no.: 9–18 ank, space / dash hatao", () => {
+    expect(normalizeBankAccount("50200088991122")).toBe("50200088991122");
+    expect(normalizeBankAccount(" 3881 0293 847 ")).toBe("38810293847");
+    expect(normalizeBankAccount("918-020-033-445-566")).toBe("918020033445566");
+    expect(normalizeBankAccount("12345678")).toBeNull(); // 8 ank — chhota
+    expect(normalizeBankAccount("1234567890123456789")).toBeNull(); // 19 ank — lamba
+    expect(normalizeBankAccount("50200A88991122")).toBeNull();
   });
 
   it("IFSC", () => {

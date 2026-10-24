@@ -1,12 +1,12 @@
 import { collection, onSnapshot, serverTimestamp, type DocumentData } from "firebase/firestore";
 import { useEffect, useMemo, useState } from "react";
-import { checkGstin, formatINR, isIfsc, normalizeMobile, toPaise } from "@bpmc/core";
+import { checkGstin, formatINR, isIfsc, normalizeBankAccount, normalizeMobile, toPaise } from "@bpmc/core";
 import { saveMaster } from "../lib/audit";
 import { can, useProfile } from "../lib/auth";
 import { db } from "../lib/firebase";
 import { Dialog, errorText, PageHead, ReasonDialog, useToast } from "../lib/ui";
 
-type FieldType = "text" | "number" | "money" | "select" | "mobile" | "gstin" | "ifsc" | "date" | "last4";
+type FieldType = "text" | "number" | "money" | "select" | "mobile" | "gstin" | "ifsc" | "date" | "last4" | "account";
 
 interface Field {
   key: string;
@@ -61,6 +61,10 @@ const MASTERS: { col: string; label: string; one: string; fields: Field[] }[] = 
       { key: "name", label: "Name", type: "text", required: true, show: true },
       { key: "mobile", label: "Mobile", type: "mobile", show: true },
       { key: "work", label: "Work type", type: "text", show: true, hint: "e.g. shuttering, bar bending" },
+      { key: "accountName", label: "Account holder name", type: "text" },
+      { key: "bankName", label: "Bank name", type: "text", hint: "e.g. State Bank of India" },
+      { key: "accountNo", label: "Account no.", type: "account", show: true },
+      { key: "ifsc", label: "IFSC", type: "ifsc" },
     ],
   },
   {
@@ -100,6 +104,9 @@ const MASTERS: { col: string; label: string; one: string; fields: Field[] }[] = 
       { key: "mobile", label: "Mobile", type: "mobile", show: true },
       { key: "aadhaarLast4", label: "Aadhaar — last 4 digits", type: "last4", hint: "The full Aadhaar number is never stored" },
       { key: "salaryPaise", label: "Monthly salary (₹)", type: "money", show: true },
+      { key: "accountName", label: "Account holder name", type: "text" },
+      { key: "bankName", label: "Bank name", type: "text", hint: "e.g. State Bank of India" },
+      { key: "accountNo", label: "Account no.", type: "account", show: true },
       { key: "ifsc", label: "IFSC", type: "ifsc" },
     ],
   },
@@ -268,6 +275,7 @@ function MasterForm({ m, row, onClose }: { m: (typeof MASTERS)[number]; row: Row
     if ((f.type === "number" || f.type === "money") && (!Number.isFinite(Number(v)) || Number(v) < 0)) return { err: "Enter a valid number" };
     if (f.type === "mobile" && !normalizeMobile(v)) return { err: "10-digit mobile starting with 6–9" };
     if (f.type === "ifsc" && !isIfsc(v)) return { err: "IFSC like SBIN0001842" };
+    if (f.type === "account" && !normalizeBankAccount(v)) return { err: "Account no. must be 9–18 digits" };
     if (f.type === "last4" && !/^\d{4}$/.test(v)) return { err: "Exactly 4 digits" };
     if (f.type === "gstin") {
       const g = checkGstin(v);
@@ -289,6 +297,7 @@ function MasterForm({ m, row, onClose }: { m: (typeof MASTERS)[number]; row: Row
       if (v !== "" && f.type === "number") out = Number(v);
       if (v !== "" && f.type === "money") out = toPaise(Number(v));
       if (v !== "" && f.type === "mobile") out = normalizeMobile(v);
+      if (v !== "" && f.type === "account") out = normalizeBankAccount(v);
       if (v !== "" && (f.type === "gstin" || f.type === "ifsc")) out = v.toUpperCase();
       if (f.key.startsWith("conv.")) {
         if (out !== null) conversions[f.key.slice(5)] = out as number;
@@ -334,7 +343,7 @@ function MasterForm({ m, row, onClose }: { m: (typeof MASTERS)[number]; row: Row
                     id={id}
                     className="input"
                     type={f.type === "date" ? "date" : "text"}
-                    inputMode={f.type === "number" || f.type === "money" || f.type === "mobile" || f.type === "last4" ? "decimal" : undefined}
+                    inputMode={f.type === "number" || f.type === "money" || f.type === "mobile" || f.type === "last4" || f.type === "account" ? "decimal" : undefined}
                     value={vals[f.key]}
                     onChange={(ev) => setVals({ ...vals, [f.key]: ev.target.value })}
                   />
