@@ -107,6 +107,18 @@ export function useUnlock(pid: string | undefined, date: string) {
   return till;
 }
 
+/** Project ke saare khule (Admin unlock) din: date → kab tak */
+export function useUnlocks(pid: string | undefined) {
+  const [m, setM] = useState<Record<string, Date>>({});
+  useEffect(() => {
+    if (!pid) return;
+    return onSnapshot(collection(db, "projects", pid, "unlocks"), (s) =>
+      setM(Object.fromEntries(s.docs.map((d) => [d.id, d.data().expiresAt?.toDate?.() as Date]).filter((x) => x[1]))),
+    );
+  }, [pid]);
+  return m;
+}
+
 /** Server ka hisab: projects/{pid}/days/{date} */
 export function useDay(pid: string | undefined, date: string) {
   const [day, setDay] = useState<DocumentData | null>(null);

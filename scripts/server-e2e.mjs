@@ -130,6 +130,9 @@ expect("Shyam (Suraj ka) hafta: 1 din × ₹900", wk?.labour?.R2?.amountPaise, 9
 expect("Hafte ka kul ₹2,550", wk?.totalPaise, 255000);
 const rb = get("projects/KSK/labourBalances/R1")?.data;
 expect("Ramu khata: ₹1,650 − ₹500 advance = ₹1,150 dena", [rb?.earnedPaise, rb?.paidPaise, rb?.balancePaise], [165000, 50000, 115000]);
+expect("Ramu statement (hafta-wise): 19 Oct hafta — 2.5 din, ₹1,650 kamai, ₹500 diya, ₹1,150 baaki", rb?.weeks, [{ weekStart: "2026-10-19", days: 2.5, otHours: 2, earnedPaise: 165000, paidPaise: 50000, balancePaise: 115000 }]);
+const sbAnil = get("projects/KSK/staffBalances/anil")?.data;
+expect("Anil statement (mahina-wise): 1 P, ₹933.33 kamai, ₹2,000 diya", sbAnil?.months, [{ month: today.slice(0, 7), present: 1, halfDay: 0, absent: 0, earnedPaise: 93333, expensePaise: 0, paidPaise: 200000, balancePaise: -106667 }]);
 expect("19 Oct gin-ti: naam-wise (Company 1 Kuli, Suraj 1 Mistri) + Hemlal gin-ti 2/8 = 3/9/0 (Suraj ki 9/9/9 double nahi)", get("projects/KSK/days/2026-10-19")?.data?.labour?.totals, { mistri: 3, kuli: 9, reja: 0, total: 12 });
 expect("22 Oct: Ramu Absent → 0", get("projects/KSK/days/2026-10-22")?.data?.labour?.totals?.total, 0);
 expect("Labour entries DONE", ["labourAttendance/W1", "labourPassbook/LP1"].map((p) => get(`projects/KSK/${p}`).data.serverStatus), ["DONE", "DONE"]);

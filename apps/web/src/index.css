@@ -162,6 +162,8 @@ tr.deleted td { opacity: .55; text-decoration: line-through; }
 .field .warn { font-size: 13px; color: var(--warn); font-weight: 600; }
 .input { min-height: 46px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--surface-2); padding: 9px 12px; width: 100%; }
 .input:focus { border-color: var(--ink); outline: none; }
+.link-btn { background: none; border: 0; padding: 0; text-align: left; color: inherit; }
+.link-btn:hover:not(:disabled) b { text-decoration: underline; }
 .checks { display: flex; flex-wrap: wrap; gap: 8px; }
 .check { display: inline-flex; gap: 6px; align-items: center; border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; font-weight: 600; }
 

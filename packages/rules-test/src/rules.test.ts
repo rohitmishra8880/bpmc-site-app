@@ -276,6 +276,13 @@ describe("labour attendance (naam-wise, weekly)", () => {
     await assertFails(addLabour(dbAs(OTHER), OTHER, "L2", ramu, 1, "CREATE"));
   });
 
+  it("labour ki detail badalna / site chhodne par band karna — reason ke saath", async () => {
+    await addLabour(dbAs(SITE), SITE, "L1", ramu, 1, "CREATE");
+    await assertSucceeds(addLabour(dbAs(SITE), SITE, "L1", { name: "Ramu M.", ratePaise: 65000 }, 2, "UPDATE", { reason: "rate badha" }));
+    await assertSucceeds(addLabour(dbAs(SITE), SITE, "L1", { active: false, leftOn: TODAY }, 3, "UPDATE", { reason: "site chhod di" }));
+    await assertFails(addLabour(dbAs(SITE), SITE, "L1", { active: true }, 4, "UPDATE", { reason: null }));
+  });
+
   it("labour hard delete nahi; soft-delete reason ke saath", async () => {
     await addLabour(dbAs(SITE), SITE, "L1", ramu, 1, "CREATE");
     await assertFails(deleteDoc(doc(dbAs(ADMIN), `projects/${PID}/labour/L1`)));
@@ -302,6 +309,40 @@ describe("labour attendance (naam-wise, weekly)", () => {
     await assertSucceeds(getDoc(doc(dbAs(SITE), `projects/${PID}/labourWeeks/2026-10-19`)));
     await assertFails(setDoc(doc(dbAs(ADMIN), `projects/${PID}/labourBalances/L1`), { balancePaise: 0 }));
     await assertFails(setDoc(doc(dbAs(SITE), `projects/${PID}/labourWeeks/2026-10-19`), { labour: {} }));
+  });
+});
+
+describe("payment badalna / hatana (labour + staff)", () => {
+  async function seedPay(col: string, id: string, businessDate: string) {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), `projects/${PID}/${col}/${id}`), {
+        projectId: PID, businessDate, labourId: "L1", staffId: "anil", kind: "ADVANCE", amountPaise: 50000, mode: "CASH",
+        createdBy: SITE, createdAt: Timestamp.now(), rev: 1, deleted: null, serverStatus: "DONE", lastAuditId: "seed",
+      });
+    });
+  }
+  function change(db: Firestore, col: string, id: string, data: Record<string, unknown>, action: "UPDATE" | "DELETE", reason: string | null) {
+    const auditId = `py${++auditSeq}`;
+    const batch = writeBatch(db);
+    batch.update(doc(db, `projects/${PID}/${col}/${id}`), { ...data, rev: 2, lastAuditId: auditId, serverStatus: "PENDING", updatedBy: SITE, updatedAt: serverTimestamp() });
+    batch.set(doc(db, `projects/${PID}/auditLog/${auditId}`), { entity: `${col}/${id}`, action, rev: 2, by: SITE, at: serverTimestamp(), reason });
+    return batch.commit();
+  }
+
+  it("2 din ke andar: rakam / mode badlo, ya hatao — reason ke saath", async () => {
+    await seedPay("labourPassbook", "P1", TODAY);
+    await assertFails(change(dbAs(SITE), "labourPassbook", "P1", { amountPaise: 60000 }, "UPDATE", null));
+    await assertSucceeds(change(dbAs(SITE), "labourPassbook", "P1", { amountPaise: 60000, mode: "UPI", refNo: "UTR1" }, "UPDATE", "galat rakam"));
+    await seedPay("staffPassbook", "S1", TODAY);
+    await assertSucceeds(change(dbAs(SITE), "staffPassbook", "S1", { deleted: { by: SITE, reason: "do baar likha" } }, "DELETE", "do baar likha"));
+  });
+
+  it("2 din ke baad: band — Admin din khole to badal sake (Rohit ka niyam)", async () => {
+    const old = addDays(TODAY, -6);
+    await seedPay("labourPassbook", "P2", old);
+    await assertFails(change(dbAs(SITE), "labourPassbook", "P2", { amountPaise: 1 }, "UPDATE", "purani galti"));
+    await setDoc(doc(dbAs(ADMIN), `projects/${PID}/unlocks/${old}`), { by: ADMIN, reason: "payment galat", expiresAt: Timestamp.fromMillis(Date.now() + 3600_000) });
+    await assertSucceeds(change(dbAs(SITE), "labourPassbook", "P2", { amountPaise: 1 }, "UPDATE", "purani galti"));
   });
 });
 

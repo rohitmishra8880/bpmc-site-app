@@ -1,11 +1,11 @@
 // Labour attendance — hafte ka sheet (Mon–Sun). Rohit ka design: PLAN.md Phase 2 "Labour Attendance".
 import { collection, doc, onSnapshot, query, serverTimestamp, where, writeBatch, type DocumentData } from "firebase/firestore";
 import { useEffect, useMemo, useState } from "react";
-import { addDays, canEditDate, formatDate, formatINR, toBusinessDateIST, toPaise, weekDates, type LabourType, type StaffMark } from "@bpmc/core";
+import { addDays, canEditDate, formatDate, formatINR, labourVisibleInWeek, toBusinessDateIST, toPaise, weekDates, type LabourType, type StaffMark } from "@bpmc/core";
 import { deviceLabel } from "../lib/audit";
 import { can, useProfile } from "../lib/auth";
 import { db } from "../lib/firebase";
-import { softDeleteWrite, writeEntries, type Entry } from "../lib/entries";
+import { softDeleteWrite, useUnlocks, writeEntries, type Entry } from "../lib/entries";
 import { useMaster, type MasterRow } from "../lib/masters";
 import { useProjects } from "../lib/projects";
 import { Dialog, errorText, ReasonDialog, useToast } from "../lib/ui";
@@ -45,12 +45,13 @@ export function LabourWeek() {
   const [counts, setCounts] = useState<Entry[]>([]);
   const [week, setWeek] = useState<DocumentData | null>(null);
   const [balances, setBalances] = useState<Record<string, DocumentData>>({});
-  const [unlocks, setUnlocks] = useState<Record<string, Date>>({});
+  const unlocks = useUnlocks(current?.id);
   const [chosen, setChosen] = useState<Record<string, Mode>>({});
   const [cell, setCell] = useState<{ l: MasterRow; date: string } | null>(null);
   const [countDay, setCountDay] = useState<{ g: MasterRow; date: string } | null>(null);
   const [adding, setAdding] = useState<MasterRow | null>(null);
   const [paying, setPaying] = useState<MasterRow | null>(null);
+  const [editing, setEditing] = useState<MasterRow | null>(null);
 
   const pid = current?.id;
   useEffect(() => {
@@ -76,14 +77,7 @@ export function LabourWeek() {
   }, [pid, ws, we]);
   useEffect(() => {
     if (!pid) return;
-    const a = onSnapshot(collection(db, "projects", pid, "labourBalances"), (s) => setBalances(Object.fromEntries(s.docs.map((d) => [d.id, d.data()]))));
-    const b = onSnapshot(collection(db, "projects", pid, "unlocks"), (s) =>
-      setUnlocks(Object.fromEntries(s.docs.map((d) => [d.id, d.data().expiresAt?.toDate?.() as Date]).filter((x) => x[1]))),
-    );
-    return () => {
-      a();
-      b();
-    };
+    return onSnapshot(collection(db, "projects", pid, "labourBalances"), (s) => setBalances(Object.fromEntries(s.docs.map((d) => [d.id, d.data()]))));
   }, [pid]);
 
   const markMap = useMemo(() => {
@@ -139,7 +133,8 @@ export function LabourWeek() {
       {groups.map((g) => {
         const mode = modeOf(g);
         const paidByUs = g.id === "COMPANY" || g.labourPaidBy === "US";
-        const people = labour.filter((l) => (l.group ?? "COMPANY") === g.id);
+        // Site chhod chuka labour sirf un hafton mein jahan woh tha (purana hisab kabhi na chhupe)
+        const people = labour.filter((l) => (l.group ?? "COMPANY") === g.id && labourVisibleInWeek(l as { active?: boolean; leftOn?: string | null }, ws, att.some((e) => e.labourId === l.id)));
         return (
           <section className="card" key={g.id}>
             <div className="card-head">
@@ -199,10 +194,13 @@ export function LabourWeek() {
                       return (
                         <tr key={l.id}>
                           <td>
-                            <b>{l.name}</b>
+                            <button className="link-btn" onClick={() => canEnter && setEditing(l)} disabled={!canEnter} aria-label={`Edit ${l.name}`}>
+                              <b>{l.name}</b> {canEnter && <span className="small muted">✎</span>}
+                            </button>
                             <span className="small muted" style={{ display: "block" }}>
                               {TYPE_LABEL[l.type] ?? l.type}
                               {l.aadhaarLast4 ? ` · XXXX-${l.aadhaarLast4}` : ""}
+                              {l.active === false && <span className="pill neutral" style={{ marginLeft: 6 }}>Left {l.leftOn ? formatDate(l.leftOn) : ""}</span>}
                             </span>
                           </td>
                           {days.map((d) => {
@@ -310,6 +308,7 @@ export function LabourWeek() {
       {countDay && <CountDialog g={countDay.g} date={countDay.date} row={countMap.get(`${countDay.g.id}_${countDay.date}`) ?? null} onClose={() => setCountDay(null)} />}
       {adding && <AddLabourDialog group={adding} onClose={() => setAdding(null)} />}
       {paying && <PayDialog l={paying} balance={balances[paying.id]} onClose={() => setPaying(null)} />}
+      {editing && <EditLabourDialog l={editing} onClose={() => setEditing(null)} />}
     </>
   );
 }
@@ -594,12 +593,16 @@ function PayDialog({ l, balance, onClose }: { l: MasterRow; balance: DocumentDat
   const toast = useToast();
   const { current } = useProjects();
   const accounts = useMaster("masters_companyAccounts");
+  const unlocks = useUnlocks(current?.id);
   const today = toBusinessDateIST(new Date());
   const [rows, setRows] = useState<Entry[]>([]);
+  const [editing, setEditing] = useState<Entry | null>(null);
   const [kind, setKind] = useState<"ADVANCE" | "PAYMENT">("PAYMENT");
   const [amt, setAmt] = useState("");
   const [remark, setRemark] = useState("");
+  const [reason, setReason] = useState("");
   const [pay, setPay] = useState<PayState>({ mode: "CASH", accountId: "", refNo: "" });
+  const [removing, setRemoving] = useState<Entry | null>(null);
 
   useEffect(() => {
     if (!current) return;
@@ -608,29 +611,53 @@ function PayDialog({ l, balance, onClose }: { l: MasterRow; balance: DocumentDat
     );
   }, [current, l.id]);
 
+  // 2 din tak, ya Admin ne din khola ho to (Rohit ka niyam)
+  const canChange = (d: string) => can(profile, "entry.edit") && canEditDate(d, new Date(), unlocks[d] ? { expiresAt: unlocks[d] } : null);
+  const startEdit = (r: Entry) => {
+    setEditing(r);
+    setKind(r.kind as "ADVANCE" | "PAYMENT");
+    setAmt(String(r.amountPaise / 100));
+    setRemark((r.remark as string) ?? "");
+    setPay({ mode: (r.mode as string) ?? "CASH", accountId: (r.accountId as string) ?? "", refNo: (r.refNo as string) ?? "" });
+    setReason("");
+  };
+  const reset = () => {
+    setEditing(null);
+    setAmt("");
+    setRemark("");
+    setReason("");
+    setPay({ mode: "CASH", accountId: "", refNo: "" });
+  };
+
   const a = Number(amt);
-  const valid = amt !== "" && Number.isFinite(a) && a > 0 && payStateValid(pay);
+  const valid = amt !== "" && Number.isFinite(a) && a > 0 && payStateValid(pay) && (!editing || reason.trim().length >= 3);
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!valid || !current) return;
+    const data = { businessDate: editing?.businessDate ?? today, labourId: l.id, labourName: l.name, group: l.group ?? "COMPANY", kind, amountPaise: toPaise(a), remark: remark.trim() || null, ...payData(pay, accounts) };
     try {
-      await writeEntries(
-        current.id,
-        profile.email,
-        [{ col: "labourPassbook", current: null, action: "CREATE", data: { businessDate: today, labourId: l.id, labourName: l.name, group: l.group ?? "COMPANY", kind, amountPaise: toPaise(a), remark: remark.trim() || null, ...payData(pay, accounts) } }],
-        null,
-      );
-      setAmt("");
-      setRemark("");
-      toast(`${kind === "ADVANCE" ? "Advance" : "Payment"} recorded ✓`);
+      await writeEntries(current.id, profile.email, [{ col: "labourPassbook", id: editing?.id, current: editing, action: editing ? "UPDATE" : "CREATE", data }], editing ? reason.trim() : null);
+      toast(editing ? "Payment updated ✓" : `${kind === "ADVANCE" ? "Advance" : "Payment"} recorded ✓`);
+      reset();
+    } catch (err) {
+      toast(errorText(err), true);
+    }
+  };
+  const remove = async (r: Entry, why: string) => {
+    if (!current) return;
+    try {
+      await writeEntries(current.id, profile.email, [softDeleteWrite("labourPassbook", r, profile.email, why)], why);
+      toast("Deleted — moved to Recycle Bin");
     } catch (err) {
       toast(errorText(err), true);
     }
   };
 
+  const weeks = (balance?.weeks as DocumentData[] | undefined) ?? [];
+
   return (
-    <Dialog title={`${l.name} — payments`} onClose={onClose}>
+    <Dialog title={`${l.name} — payments & statement`} onClose={onClose}>
       <div className="form">
         {balance ? (
           <div className="stats">
@@ -655,7 +682,42 @@ function PayDialog({ l, balance, onClose }: { l: MasterRow; balance: DocumentDat
         ) : (
           <p className="small muted">No ledger yet — the server prepares it within 5 minutes of the first attendance or payment.</p>
         )}
+
+        <h3>Week-by-week statement</h3>
+        <div className="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Week</th>
+                <th className="r">Days</th>
+                <th className="r">OT hrs</th>
+                <th className="r">Earned</th>
+                <th className="r">Paid</th>
+                <th className="r">Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...weeks].reverse().map((w) => (
+                <tr key={w.weekStart}>
+                  <td>
+                    {formatDate(w.weekStart)} – {formatDate(addDays(w.weekStart, 6))}
+                  </td>
+                  <td className="r">{w.days}</td>
+                  <td className="r">{w.otHours}</td>
+                  <td className="r">{formatINR(w.earnedPaise)}</td>
+                  <td className="r">{formatINR(w.paidPaise)}</td>
+                  <td className="r">
+                    <b style={w.balancePaise < 0 ? { color: "var(--crit)" } : undefined}>{formatINR(w.balancePaise)}</b>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {weeks.length === 0 && <div className="empty">No weeks yet</div>}
+        </div>
+
         <form onSubmit={save} className="form" style={{ padding: 0 }}>
+          <h3>{editing ? `Edit ${editing.kind === "ADVANCE" ? "advance" : "payment"} of ${formatDate(editing.businessDate)}` : `New entry for ${formatDate(today)}`}</h3>
           <div className="checks">
             <button type="button" className="tab" aria-pressed={kind === "PAYMENT"} onClick={() => setKind("PAYMENT")}>
               Weekly payment
@@ -675,12 +737,25 @@ function PayDialog({ l, balance, onClose }: { l: MasterRow; balance: DocumentDat
             </div>
           </div>
           <PaymentFields v={pay} setV={setPay} accounts={accounts} />
+          {editing && (
+            <div className="field">
+              <label htmlFor="lp-why">Reason for change *</label>
+              <input id="lp-why" className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. wrong amount" />
+            </div>
+          )}
           <div className="actions">
+            {editing && (
+              <button type="button" className="btn" onClick={reset}>
+                Cancel edit
+              </button>
+            )}
             <button className="btn primary" disabled={!valid}>
-              Record for {formatDate(today)}
+              {editing ? "Save changes" : `Record for ${formatDate(today)}`}
             </button>
           </div>
         </form>
+
+        <h3>All payments</h3>
         <div className="tbl-wrap">
           <table>
             <thead>
@@ -690,6 +765,7 @@ function PayDialog({ l, balance, onClose }: { l: MasterRow; balance: DocumentDat
                 <th className="r">Amount</th>
                 <th>Mode</th>
                 <th>Ref / remark</th>
+                <th />
               </tr>
             </thead>
             <tbody>
@@ -703,13 +779,148 @@ function PayDialog({ l, balance, onClose }: { l: MasterRow; balance: DocumentDat
                     {r.accountName ? ` · ${r.accountName}` : ""}
                   </td>
                   <td className="wrap small">{[r.refNo, r.remark].filter(Boolean).join(" · ")}</td>
+                  <td>
+                    {!r.deleted &&
+                      (canChange(r.businessDate) ? (
+                        <span className="actions">
+                          <button className="btn sm" onClick={() => startEdit(r)} aria-label="Edit">
+                            ✎
+                          </button>
+                          <button className="btn sm danger" onClick={() => setRemoving(r)} aria-label="Delete">
+                            🗑
+                          </button>
+                        </span>
+                      ) : (
+                        <span className="small muted" title="Older than 2 days — ask the Admin to reopen this day">
+                          🔒
+                        </span>
+                      ))}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
           {rows.length === 0 && <div className="empty">No payments yet</div>}
+          <p className="note">Payments can be changed for 2 days (with a reason). After that 🔒 — the Admin reopens that day from Recycle Bin → "Reopen a locked day".</p>
         </div>
       </div>
+      {removing && (
+        <ReasonDialog
+          title="Delete this payment?"
+          onCancel={() => setRemoving(null)}
+          onConfirm={(why) => {
+            const r = removing;
+            setRemoving(null);
+            void remove(r, why);
+          }}
+        />
+      )}
+    </Dialog>
+  );
+}
+
+function EditLabourDialog({ l, onClose }: { l: MasterRow; onClose: () => void }) {
+  const profile = useProfile();
+  const toast = useToast();
+  const { current } = useProjects();
+  const [v, setV] = useState({
+    name: l.name,
+    type: (l.type as LabourType) ?? "KULI",
+    rate: l.ratePaise ? String(l.ratePaise / 100) : "",
+    aadhaar: (l.aadhaarLast4 as string) ?? "",
+    active: l.active !== false,
+    leftOn: (l.leftOn as string) ?? toBusinessDateIST(new Date()),
+  });
+  const [reason, setReason] = useState("");
+  const rateN = Number(v.rate);
+  const valid = v.name.trim().length >= 2 && Number.isFinite(rateN) && rateN > 0 && (v.aadhaar === "" || /^\d{4}$/.test(v.aadhaar)) && reason.trim().length >= 3;
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!valid || !current) return;
+    const data = { name: v.name.trim(), type: v.type, ratePaise: toPaise(rateN), aadhaarLast4: v.aadhaar || null, active: v.active, leftOn: v.active ? null : v.leftOn };
+    const before: DocumentData = {};
+    const after: DocumentData = {};
+    for (const [k, nv] of Object.entries(data)) {
+      const ov = (l as DocumentData)[k] ?? (k === "active" ? true : null);
+      if (JSON.stringify(ov) !== JSON.stringify(nv)) {
+        before[k] = ov;
+        after[k] = nv;
+      }
+    }
+    try {
+      const batch = writeBatch(db);
+      const auditRef = doc(collection(db, "projects", current.id, "auditLog"));
+      const rev = Number((l as DocumentData).rev ?? 1) + 1;
+      batch.update(doc(db, "projects", current.id, "labour", l.id), { ...data, rev, lastAuditId: auditRef.id, updatedBy: profile.email, updatedAt: serverTimestamp() });
+      batch.set(auditRef, { entity: `labour/${l.id}`, action: "UPDATE", rev, by: profile.email, at: serverTimestamp(), reason: reason.trim(), before, after, device: deviceLabel() });
+      await batch.commit();
+      toast(v.active ? "Labour updated ✓" : `${v.name} marked as left ✓ — history kept`);
+      onClose();
+    } catch (err) {
+      toast(errorText(err), true);
+    }
+  };
+
+  return (
+    <Dialog title={`Edit labour — ${l.name}`} onClose={onClose}>
+      <form className="form" onSubmit={save}>
+        <div className="grid-form">
+          <div className="field">
+            <label htmlFor="el-name">Name *</label>
+            <input id="el-name" className="input" value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} />
+          </div>
+          <div className="field">
+            <span style={{ fontWeight: 600, fontSize: 14 }}>Type</span>
+            <div className="checks">
+              {TYPES.map(([k, lab]) => (
+                <button type="button" key={k} className="tab" aria-pressed={v.type === k} onClick={() => setV({ ...v, type: k })}>
+                  {lab}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="field">
+            <label htmlFor="el-rate">Daily rate (₹) *</label>
+            <input id="el-rate" className="input" inputMode="decimal" value={v.rate} onChange={(e) => setV({ ...v, rate: e.target.value })} />
+            <span className="hint">A new rate applies to new attendance only — past days keep the rate they were saved with.</span>
+          </div>
+          <div className="field">
+            <label htmlFor="el-aad">Aadhaar — last 4 digits</label>
+            <input id="el-aad" className="input" inputMode="numeric" value={v.aadhaar} onChange={(e) => setV({ ...v, aadhaar: e.target.value })} />
+          </div>
+        </div>
+        <div className="field">
+          <span style={{ fontWeight: 600, fontSize: 14 }}>Status</span>
+          <div className="checks">
+            <button type="button" className="tab" aria-pressed={v.active} onClick={() => setV({ ...v, active: true })}>
+              Working on site
+            </button>
+            <button type="button" className="tab" aria-pressed={!v.active} onClick={() => setV({ ...v, active: false })}>
+              Left site
+            </button>
+          </div>
+        </div>
+        {!v.active && (
+          <div className="field">
+            <label htmlFor="el-left">Left on</label>
+            <input id="el-left" type="date" className="input" value={v.leftOn} onChange={(e) => setV({ ...v, leftOn: e.target.value })} />
+            <span className="hint">Hidden from weeks after this date. All past attendance, payments and balance stay.</span>
+          </div>
+        )}
+        <div className="field">
+          <label htmlFor="el-why">Reason for change *</label>
+          <input id="el-why" className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. rate increased, left site" />
+        </div>
+        <div className="actions">
+          <button type="button" className="btn" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="btn primary" disabled={!valid}>
+            Save
+          </button>
+        </div>
+      </form>
     </Dialog>
   );
 }

@@ -428,7 +428,10 @@ function hisabAttendance_(parent, pMuster, pStaff, pPass, ctx) {
       return { businessDate: d.data.businessDate, kind: d.data.kind, amountPaise: d.data.amountPaise || 0, deleted: !!d.data.deleted };
     });
     loadSettings_(ctx);
-    var k = BPMCCore.staffKhata({ salaryPaise: master && master.data.salaryPaise != null ? master.data.salaryPaise : null, attendance: attendance, payments: payments, divisor: ctx.rental.monthDivisor });
+    var khataInput = { salaryPaise: master && master.data.salaryPaise != null ? master.data.salaryPaise : null, attendance: attendance, payments: payments, divisor: ctx.rental.monthDivisor };
+    var k = BPMCCore.staffKhata(khataInput);
+    // Purana hisab: mahina-wise P / HD / A, kamai, diya, chalta baaki
+    k.months = BPMCCore.staffMonthly(khataInput);
     k.staffName = master ? master.data.name : sid;
     k.salaryPaise = master ? master.data.salaryPaise || null : null;
     writes.push({
@@ -495,14 +498,13 @@ function hisabLabour_(parent, pLabAtt, pLabPass, ctx) {
   pLabAtt.concat(pLabPass).forEach(function (d) { if (d.data.labourId) ids[d.data.labourId] = 1; });
   Object.keys(ids).forEach(function (lid) {
     var m = master[lid] || {};
-    var k = BPMCCore.labourKhata({
-      ratePaise: m.ratePaise || 0,
-      marks: labourMarks_(query_(parent, 'labourAttendance', 'labourId', lid)),
-      payments: query_(parent, 'labourPassbook', 'labourId', lid).map(function (d) {
-        return { kind: d.data.kind, amountPaise: d.data.amountPaise || 0, deleted: !!d.data.deleted };
-      }),
-      shiftHours: shift,
+    var marks = labourMarks_(query_(parent, 'labourAttendance', 'labourId', lid));
+    var payments = query_(parent, 'labourPassbook', 'labourId', lid).map(function (d) {
+      return { kind: d.data.kind, businessDate: d.data.businessDate, amountPaise: d.data.amountPaise || 0, deleted: !!d.data.deleted };
     });
+    var k = BPMCCore.labourKhata({ ratePaise: m.ratePaise || 0, marks: marks, payments: payments, shiftHours: shift });
+    // Purana hisab: hafta-wise kamai, diya, chalta baaki
+    k.weeks = BPMCCore.labourStatement({ ratePaise: m.ratePaise || 0, marks: marks, payments: payments, shiftHours: shift });
     k.name = m.name || lid;
     k.group = m.group || null;
     writes.push({

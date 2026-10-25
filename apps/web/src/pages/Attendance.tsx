@@ -5,7 +5,7 @@ import { canEditDate, formatDate, formatINR, toBusinessDateIST, toPaise, type St
 import { DateBar } from "../components/DateBar";
 import { can, useProfile } from "../lib/auth";
 import { db } from "../lib/firebase";
-import { softDeleteWrite, useDay, useDayEntries, useUnlock, writeEntries, type Entry } from "../lib/entries";
+import { softDeleteWrite, useDay, useDayEntries, useUnlock, useUnlocks, writeEntries, type Entry } from "../lib/entries";
 import { useMaster, type MasterRow } from "../lib/masters";
 import { useProjects } from "../lib/projects";
 import { Dialog, errorText, PageHead, ReasonDialog, useToast } from "../lib/ui";
@@ -181,6 +181,8 @@ function StaffDay() {
         <p className="note">Day rate = monthly salary ÷ 30. P = full day, HD = half day, A = nothing. Balance = earned + staff expenses − paid (negative = staff owes).</p>
       </section>
 
+      <MonthlyStatement staff={staff} balances={balances} />
+
       {khataFor && <KhataDialog s={khataFor} date={date} open={open} balance={balances[khataFor.id]} onClose={() => setKhataFor(null)} />}
       {markChange && (
         <ReasonDialog
@@ -194,6 +196,75 @@ function StaffDay() {
         />
       )}
     </>
+  );
+}
+
+/** "2026-10" → "October 2026" */
+function monthLabel(m: string): string {
+  const [y, mo] = m.split("-");
+  return new Date(Number(y), Number(mo) - 1, 1).toLocaleString("en-IN", { month: "long", year: "numeric" });
+}
+
+/** Sab staff ka ek mahine ka hisab (server ke staffBalances.months se) */
+function MonthlyStatement({ staff, balances }: { staff: MasterRow[]; balances: Record<string, DocumentData> }) {
+  const months = [...new Set(Object.values(balances).flatMap((b) => ((b.months as DocumentData[] | undefined) ?? []).map((m) => m.month as string)))].sort().reverse();
+  const [month, setMonth] = useState("");
+  const sel = month || months[0] || "";
+  if (!months.length) return null;
+  return (
+    <section className="card">
+      <div className="card-head">
+        <div>
+          <h2>Monthly salary statement</h2>
+          <p className="small muted">Attendance, earned, advances / salary paid and running balance — calculated by the server</p>
+        </div>
+        <select className="input" style={{ width: "auto", minHeight: 38 }} value={sel} onChange={(e) => setMonth(e.target.value)} aria-label="Month">
+          {months.map((m) => (
+            <option key={m} value={m}>
+              {monthLabel(m)}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Staff</th>
+              <th className="r">P</th>
+              <th className="r">HD</th>
+              <th className="r">A</th>
+              <th className="r">Earned</th>
+              <th className="r">Staff exp.</th>
+              <th className="r">Paid</th>
+              <th className="r">Balance (to date)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {staff.map((s) => {
+              const m = ((balances[s.id]?.months as DocumentData[] | undefined) ?? []).find((x) => x.month === sel);
+              if (!m) return null;
+              return (
+                <tr key={s.id}>
+                  <td>
+                    <b>{s.name}</b>
+                  </td>
+                  <td className="r">{m.present}</td>
+                  <td className="r">{m.halfDay}</td>
+                  <td className="r">{m.absent}</td>
+                  <td className="r">{formatINR(m.earnedPaise)}</td>
+                  <td className="r">{formatINR(m.expensePaise)}</td>
+                  <td className="r">{formatINR(m.paidPaise)}</td>
+                  <td className="r">
+                    <b style={m.balancePaise < 0 ? { color: "var(--crit)" } : undefined}>{formatINR(m.balancePaise)}</b>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 
@@ -218,6 +289,25 @@ function KhataDialog({ s, date, open, balance, onClose }: { s: MasterRow; date: 
   const [remark, setRemark] = useState("");
   const [pay, setPay] = useState<PayState>({ mode: "CASH", accountId: "", refNo: "" });
   const [removing, setRemoving] = useState<Entry | null>(null);
+  const [editing, setEditing] = useState<Entry | null>(null);
+  const [reason, setReason] = useState("");
+  const unlocks = useUnlocks(current?.id);
+  // 2 din tak, ya Admin ne din khola ho to (Rohit ka niyam)
+  const canChange = (d: string) => can(profile, "entry.edit") && canEditDate(d, new Date(), unlocks[d] ? { expiresAt: unlocks[d] } : null);
+  const startEdit = (r: Entry) => {
+    setEditing(r);
+    setKind(r.kind as string);
+    setAmt(String(r.amountPaise / 100));
+    setRemark((r.remark as string) ?? "");
+    setPay({ mode: (r.mode as string) ?? "CASH", accountId: (r.accountId as string) ?? "", refNo: (r.refNo as string) ?? "" });
+    setReason("");
+  };
+  const reset = () => {
+    setEditing(null);
+    setAmt("");
+    setRemark("");
+    setReason("");
+  };
 
   useEffect(() => {
     if (!current) return;
@@ -229,7 +319,7 @@ function KhataDialog({ s, date, open, balance, onClose }: { s: MasterRow; date: 
   const a = Number(amt);
   // Staff ne apna kharcha kiya (EXPENSE) — company account se paisa nahi gaya, isliye mode nahi
   const needPay = kind !== "EXPENSE";
-  const valid = amt !== "" && Number.isFinite(a) && a > 0 && (!needPay || payStateValid(pay));
+  const valid = amt !== "" && Number.isFinite(a) && a > 0 && (!needPay || payStateValid(pay)) && (!editing || reason.trim().length >= 3);
 
   const add = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -238,12 +328,11 @@ function KhataDialog({ s, date, open, balance, onClose }: { s: MasterRow; date: 
       await writeEntries(
         current.id,
         profile.email,
-        [{ col: "staffPassbook", current: null, action: "CREATE", data: { businessDate: date, staffId: s.id, staffName: s.name, kind, amountPaise: toPaise(a), remark: remark.trim() || null, ...(needPay ? payData(pay, accounts) : { mode: null, accountId: null, accountName: null, refNo: null }) } }],
-        null,
+        [{ col: "staffPassbook", id: editing?.id, current: editing, action: editing ? "UPDATE" : "CREATE", data: { businessDate: editing?.businessDate ?? date, staffId: s.id, staffName: s.name, kind, amountPaise: toPaise(a), remark: remark.trim() || null, ...(needPay ? payData(pay, accounts) : { mode: null, accountId: null, accountName: null, refNo: null }) } }],
+        editing ? reason.trim() : null,
       );
-      setAmt("");
-      setRemark("");
-      toast("Added to ledger ✓");
+      toast(editing ? "Ledger entry updated ✓" : "Added to ledger ✓");
+      reset();
     } catch (err) {
       toast(errorText(err), true);
     }
@@ -284,8 +373,43 @@ function KhataDialog({ s, date, open, balance, onClose }: { s: MasterRow; date: 
         ) : (
           <p className="small muted">No ledger calculated yet — the server prepares it within 5 minutes of the first attendance or payment.</p>
         )}
-        {open && (
+        <h3>Month-by-month statement</h3>
+        <div className="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Month</th>
+                <th className="r">P</th>
+                <th className="r">HD</th>
+                <th className="r">A</th>
+                <th className="r">Earned</th>
+                <th className="r">Staff exp.</th>
+                <th className="r">Paid</th>
+                <th className="r">Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...((balance?.months as DocumentData[] | undefined) ?? [])].reverse().map((m) => (
+                <tr key={m.month}>
+                  <td>{monthLabel(m.month)}</td>
+                  <td className="r">{m.present}</td>
+                  <td className="r">{m.halfDay}</td>
+                  <td className="r">{m.absent}</td>
+                  <td className="r">{formatINR(m.earnedPaise)}</td>
+                  <td className="r">{formatINR(m.expensePaise)}</td>
+                  <td className="r">{formatINR(m.paidPaise)}</td>
+                  <td className="r">
+                    <b style={m.balancePaise < 0 ? { color: "var(--crit)" } : undefined}>{formatINR(m.balancePaise)}</b>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!(balance?.months as unknown[] | undefined)?.length && <div className="empty">No months yet</div>}
+        </div>
+        {(open || editing) && (
           <form onSubmit={add} className="form" style={{ padding: 0 }}>
+            <h3>{editing ? `Edit entry of ${formatDate(editing.businessDate)}` : `New entry for ${formatDate(date)}`}</h3>
             <div className="grid-form">
               <div className="field">
                 <label htmlFor="k-kind">Type</label>
@@ -307,9 +431,20 @@ function KhataDialog({ s, date, open, balance, onClose }: { s: MasterRow; date: 
               </div>
             </div>
             {needPay && <PaymentFields v={pay} setV={setPay} accounts={accounts} />}
+            {editing && (
+              <div className="field">
+                <label htmlFor="k-why">Reason for change *</label>
+                <input id="k-why" className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. wrong amount" />
+              </div>
+            )}
             <div className="actions">
+              {editing && (
+                <button type="button" className="btn" onClick={reset}>
+                  Cancel edit
+                </button>
+              )}
               <button className="btn primary" disabled={!valid}>
-                ＋ Add for {formatDate(date)}
+                {editing ? "Save changes" : `＋ Add for ${formatDate(date)}`}
               </button>
             </div>
           </form>
@@ -338,17 +473,28 @@ function KhataDialog({ s, date, open, balance, onClose }: { s: MasterRow; date: 
                   </td>
                   <td className="wrap small">{[r.refNo, r.remark].filter(Boolean).join(" · ")}</td>
                   <td>
-                    {!r.deleted && canEditDate(r.businessDate, new Date()) && can(profile, "entry.delete") && (
-                      <button className="btn sm danger" onClick={() => setRemoving(r)} aria-label="Delete">
-                        🗑
-                      </button>
-                    )}
+                    {!r.deleted &&
+                      (canChange(r.businessDate) ? (
+                        <span className="actions">
+                          <button className="btn sm" onClick={() => startEdit(r)} aria-label="Edit">
+                            ✎
+                          </button>
+                          <button className="btn sm danger" onClick={() => setRemoving(r)} aria-label="Delete">
+                            🗑
+                          </button>
+                        </span>
+                      ) : (
+                        <span className="small muted" title="Older than 2 days — ask the Admin to reopen this day">
+                          🔒
+                        </span>
+                      ))}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
           {rows.length === 0 && <div className="empty">No payments yet</div>}
+          <p className="note">Entries can be changed for 2 days (with a reason). After that 🔒 — the Admin reopens that day from Recycle Bin → "Reopen a locked day".</p>
         </div>
       </div>
       {removing && (
