@@ -1,6 +1,7 @@
 import { collection, doc, getDocs, limit, onSnapshot, orderBy, query, where, type DocumentData } from "firebase/firestore";
 import { useEffect, useMemo, useState } from "react";
 import { canEditDate, formatDate, formatHours, formatINR, machineHours, toBusinessDateIST, toPaise, type RunStatus } from "@bpmc/core";
+import { Link } from "react-router-dom";
 import { DateBar } from "../components/DateBar";
 import { can, useProfile } from "../lib/auth";
 import { db } from "../lib/firebase";
@@ -78,6 +79,7 @@ export function Machinery() {
     <>
       <DateBar title="Machine Log & Fuel" sub={`${current.name} — running hours, meter readings, diesel and shifts`} date={date} onChange={setDate} pending={pending} unlockedTill={unlock} />
       <PageHead title="Machinery Tracking" sub="One log per machine per day. Enter diesel here — stock is reduced automatically.">
+        <Link className="btn" to="/reports?r=machinery">⬇ PDF</Link>
         {open && (
           <button className="btn" onClick={() => setDedForm("new")}>
             ＋ Advance / deduction

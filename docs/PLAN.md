@@ -44,7 +44,10 @@
   - TDD: core (weekly din / OT / amount / dena), rules, server e2e — pehle fail, phir code.
 - ✅ Store / Saman Register (25 Oct 2026, TDD): aaya (rate + GST + party + payment + bill + gaadi + samay), thekedar ko issue, wapas (Theek / Kharab / Toota / Kho gaya), kharch, doosri site transfer (us site ka TRANSFER_IN server banata hai), bade saman ke number (RCM-01, master ka prefix), service / repair history, consumable limit + "X din se wapas nahi" alert (Settings `store.overdueDays`, default 7), mahine ka statement (server `storeSummary/m_YYYY-MM`). Udhaar → party khate mein bill (`ledger/st_`); toota / kho gaya → thekedar ki katauti (`ledger/sr_`, default qty × aakhri kharid rate, badal sakte hain). Tests: core 109, rules 45, server e2e 44.
   - Baaki: bill ki photo (Daily Work ke photo ke saath — Drive); transfer sirf un site mein jo user ko dikhti hain.
-- ⏳ Baaki Phase 2: Daily Work + Drive photos, Creditors
+  - Live run (25 Oct, Keshkal test): Sheet / Rod cutter (RCM-01, RCM-02) / GI pipe — aaya, issue, wapas (2 toote → Suraj par ₹1,800 katauti), kharch, Dantewada transfer — sab hisab sahi.
+- ✅ Reports & PDF (25 Oct 2026, Rohit: "very imp"): naya Reports page + har module par "⬇ PDF" — Staff attendance & khata (mahina), Labour company / contractor (hafta ya mahina, OT, paid, baaki + head-count), Machinery (mahina: SR / CR / ghante / diesel / amount + rental bill), Material stock (tarikh se tarikh), Store register (mahina), Party / thekedar ledger (chalta baaki). Safed A4 kagaz, logo watermark, sign line; browser "Save as PDF" (Hindi sahi, free). Core `latestMarks`, `runningLedger`, `reportFileName` (TDD).
+  - **Niyam:** har naye module (Daily Work → contractor ka kaam day-wise, Creditors → ledger payments, DPR) ka PDF usi waqt banega.
+- ⏳ Baaki Phase 2: Daily Work + Drive photos (+ uska PDF), Creditors (+ PDF)
 
 ## Phase 1 — haal (24 Oct 2026) ✅
 - ✅ core formule + jaanch (GSTIN / mobile / IFSC) — 61 tests

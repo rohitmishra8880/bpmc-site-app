@@ -176,7 +176,7 @@ const rc = get("projects/KSK/ledger/sr_S6")?.data;
 expect("Toota saman → Suraj ke khate mein ₹1,200 katauti", [rc?.type, rc?.partyId, rc?.partyKind, rc?.amountPaise], ["RECOVERY", "suraj", "CONTRACTOR", 120000]);
 expect("Nakad saman ka bill nahi", get("projects/KSK/ledger/st_S3"), null);
 const tr = get("projects/DNT/storeMoves/tr_KSK_S9")?.data;
-expect("Transfer: Dantewada mein 5 GI pipe TRANSFER_IN (Keshkal se)", [tr?.type, tr?.qty, tr?.otherProjectId, tr?.serverStatus], ["TRANSFER_IN", 5, "KSK", "DONE"]);
+expect("Transfer: Dantewada mein 5 GI pipe TRANSFER_IN (Keshkal se, naam ke saath)", [tr?.type, tr?.qty, tr?.otherProjectId, tr?.otherProjectName, tr?.serverStatus], ["TRANSFER_IN", 5, "KSK", "EMRS Keshkal", "DONE"]);
 expect("Transfer: Dantewada ka stock 5", get("projects/DNT/storeSummary/current")?.data?.items?.pipe?.inStore, 5);
 expect("Store entries DONE", ["storeMoves/S1", "storeMoves/S9", "storeService/V1"].map((p) => get(`projects/KSK/${p}`).data.serverStatus), ["DONE", "DONE", "DONE"]);
 

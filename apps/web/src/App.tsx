@@ -12,6 +12,7 @@ import { Login, NoAccess } from "./pages/Login";
 import { Masters } from "./pages/Masters";
 import { Projects } from "./pages/Projects";
 import { RecycleBin } from "./pages/RecycleBin";
+import { Reports } from "./pages/Reports";
 import { Settings } from "./pages/Settings";
 import { Store } from "./pages/Store";
 import { Users } from "./pages/Users";
@@ -36,7 +37,7 @@ function Gate() {
           <Route path="attendance" element={<Attendance />} />
           <Route path="work" element={<Soon title="Daily Work" phase="Phase 2" what="Concrete M³, shuttering Sq M, steel Kg, photos" />} />
           <Route path="creditors" element={<Soon title="Creditors / Party Ledger" phase="Phase 2" what="Bills, payments, outstanding" />} />
-          <Route path="reports" element={<Soon title="Reports (DPR)" phase="Phase 3" what="Daily DPR — lock, versions, PDF, WhatsApp, Obsidian" />} />
+          <Route path="reports" element={<Reports />} />
           <Route path="ai" element={<Soon title="AI Insights" phase="Phase 4" what="Questions answered from real site data" />} />
           <Route path="help" element={<Soon title="Help Center" phase="Phase 4" what="Calculators, SOPs, emergency contacts" />} />
           <Route path="bin" element={<RecycleBin />} />

@@ -26,7 +26,9 @@ export function Attendance() {
   const [tab, setTab] = useState<"labour" | "staff">("labour");
   return (
     <>
-      <PageHead title="Attendance" sub="Labour attendance (weekly sheet) and company staff with their ledger" />
+      <PageHead title="Attendance" sub="Labour attendance (weekly sheet) and company staff with their ledger">
+        <Link className="btn" to={tab === "labour" ? "/reports?r=labour" : "/reports?r=staff"}>⬇ PDF</Link>
+      </PageHead>
       <div className="tabs" role="group" aria-label="Attendance">
         <button className="tab" aria-pressed={tab === "labour"} onClick={() => setTab("labour")}>
           👷 Labour attendance (weekly)

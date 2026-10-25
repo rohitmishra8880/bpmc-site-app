@@ -3,6 +3,7 @@
 import { collection, doc, getDocs, onSnapshot, query, where, type DocumentData } from "firebase/firestore";
 import { useEffect, useMemo, useState } from "react";
 import { canEditDate, formatDate, formatINR, formatQtyShort, lineAmount, toBusinessDateIST, toPaise, type Holding, type StoreAlert, type StoreBalance, type StoreStatementRow } from "@bpmc/core";
+import { Link } from "react-router-dom";
 import { DateBar } from "../components/DateBar";
 import { saveMaster } from "../lib/audit";
 import { can, useProfile } from "../lib/auth";
@@ -148,6 +149,7 @@ export function Store() {
       {tab === "day" && (
         <>
           <PageHead title={formatDate(date)} sub="Everything that came in or went out of the store on this day">
+            <Link className="btn" to="/reports?r=store">⬇ PDF</Link>
             {open && (
               <>
                 <button className="btn dark" onClick={() => setForm({ kind: "INWARD", row: null })}>＋ Received</button>

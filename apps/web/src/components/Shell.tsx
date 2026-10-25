@@ -29,7 +29,7 @@ const NAV: { group: string | null; items: NavItem[] }[] = [
       { to: "/attendance", ic: "👥", label: "Attendance" },
       { to: "/work", ic: "📅", label: "Daily Work", soon: "P2" },
       { to: "/creditors", ic: "📒", label: "Creditors / Party Ledger", soon: "P2" },
-      { to: "/reports", ic: "📄", label: "Reports (DPR)", soon: "P3" },
+      { to: "/reports", ic: "📄", label: "Reports & PDF" },
     ],
   },
   { group: "Master data", items: [{ to: "/masters", ic: "📋", label: "Masters" }] },

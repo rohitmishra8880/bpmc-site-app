@@ -71,6 +71,7 @@ export function Inventory() {
         )}
       </div>
       <PageHead title={`${item.name}`} sub={`${GROUP_LABEL[item.group as string] ?? "Material"} · tracked in ${u}`}>
+        <Link className="btn" to="/reports?r=stock">⬇ PDF</Link>
         {open && (
           <>
             <button className="btn dark" onClick={() => setForm({ kind: "IN", row: null })}>

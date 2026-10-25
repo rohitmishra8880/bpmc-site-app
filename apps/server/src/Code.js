@@ -322,7 +322,9 @@ function hisabStoreRecovery_(parent, pid, pending) {
  * Entry hati / site badli → purana TRANSFER_IN bhi hata. Jis site mein likha, uska store summary dobara.
  */
 function hisabStoreTransfers_(pid, pending, storeDirty) {
-  var projectIds = listDocs_('projects').map(function (p) { return p.id; });
+  var names = {};
+  listDocs_('projects').forEach(function (p) { names[p.id] = p.data.name || p.id; });
+  var projectIds = Object.keys(names);
   var writes = [];
   var now = new Date();
   pending.forEach(function (d) {
@@ -345,7 +347,7 @@ function hisabStoreTransfers_(pid, pending, storeDirty) {
           name: fullName_(path),
           fields: encFields_({
             projectId: q, businessDate: m.businessDate, type: 'TRANSFER_IN', itemId: m.itemId, itemName: m.itemName || null, unit: m.unit || null,
-            qty: m.qty, otherProjectId: pid, source: 'projects/' + pid + '/storeMoves/' + d.id, remark: m.remark || null,
+            qty: m.qty, otherProjectId: pid, otherProjectName: names[pid], source: 'projects/' + pid + '/storeMoves/' + d.id, remark: m.remark || null,
             deleted: null, serverStatus: 'DONE', createdBy: existing ? existing.data.createdBy : 'server', createdAt: existing ? existing.data.createdAt : now,
             updatedBy: 'server', updatedAt: now, rev: existing ? (existing.data.rev || 1) + 1 : 1, lastAuditId: null,
           }),
