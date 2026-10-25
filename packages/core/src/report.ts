@@ -55,7 +55,8 @@ export function runningLedger(entries: LedgerLine[], openingPaise: Paise = 0): L
   return entries
     .filter((e) => !e.deleted)
     .slice()
-    .sort((a, b) => a.businessDate.localeCompare(b.businessDate))
+    // ek din ke andar pehle bill, phir bhugtan / katauti
+    .sort((a, b) => a.businessDate.localeCompare(b.businessDate) || Number(b.type === "BILL") - Number(a.type === "BILL"))
     .map((e) => {
       const debit = e.type === "BILL" ? e.amountPaise : 0;
       const credit = e.type === "BILL" ? 0 : e.amountPaise;

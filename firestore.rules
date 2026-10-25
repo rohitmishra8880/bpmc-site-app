@@ -177,6 +177,8 @@ service cloud.firestore {
           && auditMatches(pid, col, id, 'CREATE');
 
         allow update: if isEntryCol() && member(pid)
+          // server ki banayi entry (udhaar bill, katauti, transfer) — badlav asli entry mein hota hai
+          && resource.data.createdBy != 'server'
           && dateOpen(pid, resource.data.businessDate)
           && dateOpen(pid, nd().businessDate)
           && nd().projectId == resource.data.projectId
@@ -274,6 +276,11 @@ service cloud.firestore {
       }
       // Store: stock, thekedar ke paas, alert (storeSummary) aur bade saman ke number (storeAssets) — server
       match /storeSummary/{id} {
+        allow read: if member(pid);
+        allow write: if false;
+      }
+      // Party / thekedar ka bakaya + overdue — server
+      match /ledgerSummary/{id} {
         allow read: if member(pid);
         allow write: if false;
       }

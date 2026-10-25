@@ -47,7 +47,9 @@
   - Live run (25 Oct, Keshkal test): Sheet / Rod cutter (RCM-01, RCM-02) / GI pipe — aaya, issue, wapas (2 toote → Suraj par ₹1,800 katauti), kharch, Dantewada transfer — sab hisab sahi.
 - ✅ Reports & PDF (25 Oct 2026, Rohit: "very imp"): naya Reports page + har module par "⬇ PDF" — Staff attendance & khata (mahina), Labour company / contractor (hafta ya mahina, OT, paid, baaki + head-count), Machinery (mahina: SR / CR / ghante / diesel / amount + rental bill), Material stock (tarikh se tarikh), Store register (mahina), Party / thekedar ledger (chalta baaki). Safed A4 kagaz, logo watermark, sign line; browser "Save as PDF" (Hindi sahi, free). Core `latestMarks`, `runningLedger`, `reportFileName` (TDD).
   - **Niyam:** har naye module (Daily Work → contractor ka kaam day-wise, Creditors → ledger payments, DPR) ka PDF usi waqt banega.
-- ⏳ Baaki Phase 2: Daily Work + Drive photos (+ uska PDF), Creditors (+ PDF)
+- ✅ Design v3 (25 Oct 2026, Rohit ki 2 image): light = safed card + rangeen border, dark = gradient + glow; sidebar navy; andar ke saare page bhi isi mein. Dashboard par asli data ke bar / gauge, critical alerts, Reports + Creditors card.
+- ✅ Creditors / Party Ledger (25 Oct 2026, TDD): bill (GST ke saath), bhugtan (mode / account / ref), debit note; bakaya + overdue (credit period, FIFO) server `ledgerSummary/current`; dena aur lena (thekedar katauti / advance) alag; server ke bill (udhaar, katauti, transfer) phone se nahi badalte (rules); khata dialog + PDF. Tests: core 119, rules 48, server 51.
+- ⏳ Baaki Phase 2: Daily Work + Drive photos (+ uska PDF), machine rental bill → owner ka khata, `bpmc-site-live` project
 
 ## Phase 1 — haal (24 Oct 2026) ✅
 - ✅ core formule + jaanch (GSTIN / mobile / IFSC) — 61 tests

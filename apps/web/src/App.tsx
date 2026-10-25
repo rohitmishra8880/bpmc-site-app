@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from "./lib/auth";
 import { ProjectProvider } from "./lib/projects";
 import { ToastProvider } from "./lib/ui";
 import { Attendance } from "./pages/Attendance";
+import { Creditors } from "./pages/Creditors";
 import { Dashboard } from "./pages/Dashboard";
 import { EditHistory } from "./pages/EditHistory";
 import { Inventory } from "./pages/Inventory";
@@ -36,7 +37,7 @@ function Gate() {
           <Route path="machinery" element={<Machinery />} />
           <Route path="attendance" element={<Attendance />} />
           <Route path="work" element={<Soon title="Daily Work" phase="Phase 2" what="Concrete M³, shuttering Sq M, steel Kg, photos" />} />
-          <Route path="creditors" element={<Soon title="Creditors / Party Ledger" phase="Phase 2" what="Bills, payments, outstanding" />} />
+          <Route path="creditors" element={<Creditors />} />
           <Route path="reports" element={<Reports />} />
           <Route path="ai" element={<Soon title="AI Insights" phase="Phase 4" what="Questions answered from real site data" />} />
           <Route path="help" element={<Soon title="Help Center" phase="Phase 4" what="Calculators, SOPs, emergency contacts" />} />

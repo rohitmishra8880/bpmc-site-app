@@ -37,6 +37,13 @@ describe("PDF report — party / thekedar khata (chalta baaki)", () => {
       ["r1", 0, 180000, 3190000],
     ]);
   });
+  it("ek hi din: pehle bill, phir bhugtan (beech mein minus na dikhe)", () => {
+    const rows = runningLedger([
+      { id: "p", businessDate: "2026-10-25", type: "PAYMENT", amountPaise: 1000000 },
+      { id: "b", businessDate: "2026-10-25", type: "BILL", amountPaise: 3540000 },
+    ]);
+    expect(rows.map((r) => [r.id, r.balancePaise])).toEqual([["b", 3540000], ["p", 2540000]]);
+  });
   it("opening baaki se shuru", () => {
     expect(runningLedger([{ id: "p", businessDate: "2026-11-01", type: "PAYMENT", amountPaise: 100 }], 500).at(-1)?.balancePaise).toBe(400);
   });

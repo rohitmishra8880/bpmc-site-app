@@ -130,6 +130,7 @@ function runHisab() {
 
     var ctx = { today: today, started: started, materialIds: materialIds, machines: null, rental: null, storeItems: null };
     var storeDirty = {};
+    var ledgerDirty = {};
 
     listDocs_('projects').forEach(function (p) {
       var parent = 'projects/' + p.id;
@@ -146,7 +147,11 @@ function runHisab() {
       // "X din se" har din badalta hai — din badla to store summary dobara
       var sum = getDoc_(parent + '/storeSummary/current');
       if (pStore.length || pServ.length || (sum && sum.data.asOf !== today)) storeDirty[p.id] = 1;
-      var all = pStock.concat(pLogs, pDeds, pMuster, pStaff, pPass, pLabAtt, pLabPass, pStore, pServ);
+      var pLedger = query_(parent, 'ledger', 'serverStatus', ENTRY_STATUS_PENDING);
+      // Bakaya udhaar (stock / store) aur katauti se bhi badalta hai; overdue ke din roz badalte hain
+      var lsum = getDoc_(parent + '/ledgerSummary/current');
+      if (pLedger.length || pStock.length || pStore.length || (lsum && lsum.data.asOf !== today)) ledgerDirty[p.id] = 1;
+      var all = pStock.concat(pLogs, pDeds, pMuster, pStaff, pPass, pLabAtt, pLabPass, pStore, pServ, pLedger);
       if (!all.length) return;
       var out = {};
       if (pStore.length) {
@@ -167,6 +172,9 @@ function runHisab() {
     // Store summary sabse aakhir mein — transfer se doosri site mein aaya maal bhi gina jaaye
     Object.keys(storeDirty).forEach(function (pid) {
       (log.projects[pid] = log.projects[pid] || {}).store = hisabStoreSummary_('projects/' + pid, pid, ctx);
+    });
+    Object.keys(ledgerDirty).forEach(function (pid) {
+      (log.projects[pid] = log.projects[pid] || {}).ledger = hisabLedgerSummary_('projects/' + pid, ctx);
     });
   } catch (e) {
     log.error = String(e && e.message || e);
@@ -276,6 +284,46 @@ function hisabUdhaar_(parent, pid, pending, o) {
   });
   if (writes.length) commit_(writes);
   return writes.length;
+}
+
+/**
+ * Creditors: har party / thekedar ka bill, bhugtan, bakaya, overdue (BPMCCore.partyStatus) → ledgerSummary/current.
+ * Credit period masters_parties.creditDays se; thekedar ka 0.
+ */
+function hisabLedgerSummary_(parent, ctx) {
+  if (!ctx.parties) {
+    ctx.parties = {};
+    listDocs_('masters_parties').forEach(function (d) { ctx.parties[d.id] = { name: d.data.name, kind: 'PARTY', creditDays: d.data.creditDays != null ? Number(d.data.creditDays) : null }; });
+    listDocs_('masters_contractors').forEach(function (d) { if (!ctx.parties[d.id]) ctx.parties[d.id] = { name: d.data.name, kind: 'CONTRACTOR', creditDays: 0 }; });
+  }
+  var byParty = {};
+  query_(parent, 'ledger').forEach(function (d) {
+    var x = d.data;
+    if (!x.partyId || !x.type || !x.businessDate) return;
+    (byParty[x.partyId] = byParty[x.partyId] || { name: x.partyName || null, lines: [] }).lines.push({ id: d.id, businessDate: x.businessDate, type: x.type, amountPaise: Number(x.amountPaise) || 0, deleted: !!x.deleted });
+  });
+  var parties = {};
+  // dena (+ bakaya) aur lena (− bakaya: advance / thekedar ki katauti) alag — mila ke galat jod ban jaata hai
+  var totals = { billPaise: 0, paidPaise: 0, bakayaPaise: 0, toRecoverPaise: 0, overduePaise: 0 };
+  Object.keys(byParty).forEach(function (pid) {
+    var m = ctx.parties[pid] || { name: byParty[pid].name || pid, kind: 'PARTY', creditDays: null };
+    var st = BPMCCore.partyStatus(byParty[pid].lines, ctx.today, m.creditDays);
+    if (!st.entries) return;
+    st.name = m.name;
+    st.kind = m.kind;
+    st.creditDays = m.creditDays;
+    parties[pid] = st;
+    totals.billPaise += st.billPaise;
+    totals.paidPaise += st.paidPaise;
+    if (st.bakayaPaise > 0) totals.bakayaPaise += st.bakayaPaise;
+    else totals.toRecoverPaise -= st.bakayaPaise;
+    totals.overduePaise += st.overduePaise;
+  });
+  commit_([{
+    update: { name: fullName_(parent + '/ledgerSummary/current'), fields: encFields_({ asOf: ctx.today, parties: parties, totals: totals }) },
+    updateTransforms: [{ fieldPath: 'computedAt', setToServerValue: 'REQUEST_TIME' }],
+  }]);
+  return { parties: Object.keys(parties).length };
 }
 
 /** Server ka soft-delete (reason ke saath) */

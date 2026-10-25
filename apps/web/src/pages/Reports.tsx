@@ -20,7 +20,7 @@ const REPORTS: { k: Kind; ic: string; label: string; sub: string; soon?: string;
   { k: "machinery", ic: "🔧", label: "Machinery", sub: "Month — day-wise SR / CR / hours / diesel / amount + rental bill", landscape: true },
   { k: "stock", ic: "📦", label: "Material stock", sub: "Date range — day-wise opening, received, used, balance", landscape: false },
   { k: "store", ic: "🧰", label: "Store register", sub: "Month — statement, movements, with contractors", landscape: true },
-  { k: "ledger", ic: "📒", label: "Party / contractor ledger", sub: "Bills, payments, recovery — running balance", landscape: false },
+  { k: "ledger", ic: "📒", label: "Party / contractor ledger", sub: "Bills, payments, debit notes, recovery — running balance", landscape: false },
   { k: "work", ic: "📅", label: "Contractor work (day-wise)", sub: "M³ / Sq M / Kg by contractor", soon: "Comes with Daily Work", landscape: true },
   { k: "dpr", ic: "📄", label: "Daily Progress Report (DPR)", sub: "English / हिंदी, signatures", soon: "Phase 3", landscape: false },
 ];
@@ -81,7 +81,7 @@ export function Reports() {
   const [labourPeriod, setLabourPeriod] = useState<"week" | "month">("week");
   const [weekOf, setWeekOf] = useState(today);
   const [group, setGroup] = useState(params.get("g") ?? "COMPANY");
-  const [party, setParty] = useState("");
+  const [party, setParty] = useState(params.get("p") ?? "");
   const contractors = useMaster("masters_contractors");
   const parties = useMaster("masters_parties");
 

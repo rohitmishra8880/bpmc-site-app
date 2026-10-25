@@ -109,6 +109,12 @@ put("projects/KSK/storeMoves/S9", P({ businessDate: today, type: "TRANSFER_OUT",
 put("projects/KSK/storeMoves/S10", P({ businessDate: today, type: "INWARD", itemId: "rcm", qty: 1, payMode: "NAKAD", deleted: { by: "x", reason: "galti" } }));
 put("projects/KSK/storeService/V1", P({ businessDate: today, itemId: "rcm", tag: "RCM-01", kind: "REPAIR", costPaise: 80000, remark: "Blade changed" }));
 
+// Creditors: HPCL — credit 7 din; purana bill (10 din) + aaj ka udhaar diesel (upar d2) + ₹5,000 bhugtan
+put("masters_parties/hpcl", { name: "HPCL", creditDays: 7, deleted: null });
+put("masters_parties/sharma", { name: "Sharma Hardware", creditDays: 30, deleted: null });
+put("projects/KSK/ledger/LB1", P({ businessDate: B.addDays(today, -10), type: "BILL", partyId: "hpcl", partyName: "HPCL", amountPaise: 1000000, billNo: "HP-OLD" }));
+put("projects/KSK/ledger/LP1", P({ businessDate: today, type: "PAYMENT", partyId: "hpcl", partyName: "HPCL", amountPaise: 500000, mode: "NEFT", accountId: "sbi", refNo: "UTR1" }));
+
 // ---- chalao ----
 S.runHisab();
 
@@ -190,6 +196,19 @@ expect("Edit: Keshkal GI pipe wapas 22 (alert hata)", [get("projects/KSK/storeSu
 expect("Edit: Rod cutter 1 → RCM-02 CANCELLED, RCM-01 bana raha", S.listDocs_("projects/KSK/storeAssets").map((d) => [d.id, d.data.status]), [["RCM-01", "ACTIVE"], ["RCM-02", "CANCELLED"]]);
 expect("Edit: udhaar bill ₹17,700 (1 × ₹15,000 + 18%), rev 2", [get("projects/KSK/ledger/st_S1")?.data?.amountPaise, get("projects/KSK/ledger/st_S1")?.data?.rev], [1770000, 2]);
 expect("Edit: katauti 0 ki → khate se hati", !!get("projects/KSK/ledger/sr_S6")?.data?.deleted, true);
+
+const ls = get("projects/KSK/ledgerSummary/current")?.data;
+const hp = ls?.parties?.hpcl;
+expect("Creditors: HPCL bill ₹10,000 + ₹53,700 = ₹63,700, diya ₹5,000 → bakaya ₹58,700", [hp?.billPaise, hp?.paidPaise, hp?.bakayaPaise], [6370000, 500000, 5870000]);
+expect("Creditors: purane bill ka ₹5,000 baaki, 7 din credit ke baad 3 din overdue", [hp?.overduePaise, hp?.overdueDays, hp?.name, hp?.creditDays], [500000, 3, "HPCL", 7]);
+expect("Creditors: Sharma (store udhaar, edit ke baad) ₹17,700, overdue nahi", [ls?.parties?.sharma?.bakayaPaise, ls?.parties?.sharma?.overduePaise], [1770000, 0]);
+expect("Creditors: Suraj ki katauti hati → list mein nahi", ls?.parties?.suraj, undefined);
+expect("Creditors: kul bakaya / overdue", [ls?.totals?.bakayaPaise, ls?.totals?.overduePaise, ls?.asOf], [5870000 + 1770000, 500000, today]);
+put("projects/KSK/ledger/LR1", P({ businessDate: today, type: "RECOVERY", partyId: "suraj", amountPaise: 90000 }));
+S.runHisab();
+const ls2 = get("projects/KSK/ledgerSummary/current")?.data;
+expect("Creditors: dena (bakaya) aur lena (thekedar se) alag — mila ke nahi", [ls2?.totals?.bakayaPaise, ls2?.totals?.toRecoverPaise], [5870000 + 1770000, 90000]);
+expect("Manual bill / payment DONE", ["ledger/LB1", "ledger/LP1"].map((x) => get(`projects/KSK/${x}`).data.serverStatus), ["DONE", "DONE"]);
 
 console.log(fails ? `\n${fails} jaanch FAIL` : "\nSab server jaanch pass");
 process.exit(fails ? 1 : 0);

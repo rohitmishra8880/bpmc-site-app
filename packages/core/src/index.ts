@@ -17,3 +17,4 @@ export * from "./labour";
 export * from "./statement";
 export * from "./store";
 export * from "./report";
+export * from "./creditor";

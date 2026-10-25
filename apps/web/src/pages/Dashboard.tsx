@@ -128,7 +128,7 @@ export function Dashboard() {
         <Mod tone="t-mint" to="/store" ic="🧰" title="Store Register" sub="Tools issued / returned" />
         <Mod tone="t-purple" to="/attendance" ic="👥" title="Attendance" sub="Staff + contractor muster" />
         <Mod tone="t-indigo" to="/machinery" ic="🔧" title="Machinery" sub="SR / CR, diesel, breakdowns" />
-        <Mod tone="t-gold" to="/creditors" ic="📒" title="Creditors" sub="Bills, payments, bakaya" soon />
+        <Mod tone="t-gold" to="/creditors" ic="📒" title="Creditors" sub="Bills, payments, bakaya" />
         <Mod tone="t-slate" to="/reports" ic="📄" title="Reports & PDF" sub="Every hisab as a PDF" />
       </div>
       <p className="small muted">

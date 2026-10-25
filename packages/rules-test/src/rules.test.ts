@@ -345,6 +345,41 @@ describe("store / saman register", () => {
   });
 });
 
+describe("creditors / party khata", () => {
+  it("site user bill aur payment (mode / account / ref) audit ke saath bana sake", async () => {
+    const db = dbAs(SITE);
+    const batch = writeBatch(db);
+    const base = { projectId: PID, createdBy: SITE, createdAt: serverTimestamp(), deleted: null, rev: 1, serverStatus: "PENDING" };
+    batch.set(doc(db, `projects/${PID}/ledger/LB1`), { ...base, lastAuditId: "cr1", businessDate: TODAY, type: "BILL", partyId: "p1", amountPaise: 5370000, billNo: "HP-1" });
+    batch.set(doc(db, `projects/${PID}/ledger/LP1`), { ...base, lastAuditId: "cr2", businessDate: TODAY, type: "PAYMENT", partyId: "p1", amountPaise: 2000000, mode: "NEFT", accountId: "sbi", refNo: "UTR123" });
+    batch.set(doc(db, `projects/${PID}/auditLog/cr1`), { entity: "ledger/LB1", action: "CREATE", rev: 1, by: SITE, at: serverTimestamp(), reason: null });
+    batch.set(doc(db, `projects/${PID}/auditLog/cr2`), { entity: "ledger/LP1", action: "CREATE", rev: 1, by: SITE, at: serverTimestamp(), reason: null });
+    await assertSucceeds(batch.commit());
+  });
+
+  it("server ka banaya bill (udhaar se) phone se badal / hata nahi sakte — Admin bhi nahi", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), `projects/${PID}/ledger/sm_X`), { projectId: PID, businessDate: TODAY, type: "BILL", partyId: "p1", amountPaise: 100, createdBy: "server", createdAt: new Date(), deleted: null, rev: 1, serverStatus: "DONE" });
+    });
+    for (const who of [SITE, ADMIN]) {
+      const db = dbAs(who);
+      const batch = writeBatch(db);
+      batch.update(doc(db, `projects/${PID}/ledger/sm_X`), { amountPaise: 1, rev: 2, updatedBy: who, updatedAt: serverTimestamp(), serverStatus: "PENDING", lastAuditId: `srv${who.length}` });
+      batch.set(doc(db, `projects/${PID}/auditLog/srv${who.length}`), { entity: "ledger/sm_X", action: "UPDATE", rev: 2, by: who, at: serverTimestamp(), reason: "galat rakam" });
+      await assertFails(batch.commit());
+    }
+  });
+
+  it("party ka hisab (ledgerSummary): member padhe, likhe koi nahi", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), `projects/${PID}/ledgerSummary/current`), { parties: {} });
+    });
+    await assertSucceeds(getDoc(doc(dbAs(SITE), `projects/${PID}/ledgerSummary/current`)));
+    await assertFails(getDoc(doc(dbAs(OTHER), `projects/${PID}/ledgerSummary/current`)));
+    await assertFails(setDoc(doc(dbAs(ADMIN), `projects/${PID}/ledgerSummary/current`), { parties: {} }));
+  });
+});
+
 describe("payment badalna / hatana (labour + staff)", () => {
   async function seedPay(col: string, id: string, businessDate: string) {
     await env.withSecurityRulesDisabled(async (ctx) => {

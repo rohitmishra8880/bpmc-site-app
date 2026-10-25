@@ -28,7 +28,7 @@ const NAV: { group: string | null; items: NavItem[] }[] = [
       { to: "/machinery", ic: "🔧", label: "Machinery" },
       { to: "/attendance", ic: "👥", label: "Attendance" },
       { to: "/work", ic: "📅", label: "Daily Work", soon: "P2" },
-      { to: "/creditors", ic: "📒", label: "Creditors / Party Ledger", soon: "P2" },
+      { to: "/creditors", ic: "📒", label: "Creditors / Party Ledger" },
       { to: "/reports", ic: "📄", label: "Reports & PDF" },
     ],
   },
