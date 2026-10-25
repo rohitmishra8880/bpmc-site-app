@@ -17,6 +17,7 @@ import { Reports } from "./pages/Reports";
 import { Settings } from "./pages/Settings";
 import { Store } from "./pages/Store";
 import { Users } from "./pages/Users";
+import { Work } from "./pages/Work";
 
 function Gate() {
   const s = useAuth();
@@ -36,7 +37,7 @@ function Gate() {
           <Route path="store" element={<Store />} />
           <Route path="machinery" element={<Machinery />} />
           <Route path="attendance" element={<Attendance />} />
-          <Route path="work" element={<Soon title="Daily Work" phase="Phase 2" what="Concrete M³, shuttering Sq M, steel Kg, photos" />} />
+          <Route path="work" element={<Work />} />
           <Route path="creditors" element={<Creditors />} />
           <Route path="reports" element={<Reports />} />
           <Route path="ai" element={<Soon title="AI Insights" phase="Phase 4" what="Questions answered from real site data" />} />

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { canEditDate, formatDate, formatINR, formatQtyShort, lineAmount, toBusinessDateIST, toPaise, type Holding, type StoreAlert, type StoreBalance, type StoreStatementRow } from "@bpmc/core";
 import { Link } from "react-router-dom";
 import { DateBar } from "../components/DateBar";
+import { PhotoDialog, refKey, useDayPhotos } from "../components/Photos";
 import { saveMaster } from "../lib/audit";
 import { can, useProfile } from "../lib/auth";
 import { softDeleteWrite, useDayEntries, useUnlock, useUnlocks, writeEntries, type Entry } from "../lib/entries";
@@ -80,6 +81,8 @@ export function Store() {
   const [form, setForm] = useState<{ kind: Kind; row: Entry | null; preset?: { contractorId?: string; itemId?: string } } | null>(null);
   const [service, setService] = useState<{ row: Entry | null; tag?: string; itemId?: string } | null>(null);
   const [removing, setRemoving] = useState<{ col: "storeMoves" | "storeService"; e: Entry } | null>(null);
+  const [photoFor, setPhotoFor] = useState<{ refId: string; title: string; label: string } | null>(null);
+  const photos = useDayPhotos(current?.id, date);
   const { rows } = useDayEntries(current?.id, "storeMoves", date);
   const unlock = useUnlock(current?.id, date);
   const summary = useProjDoc(current?.id, "storeSummary", "current") as Summary | null | undefined;
@@ -172,6 +175,8 @@ export function Store() {
                 open={open}
                 onEdit={() => setForm({ kind: r.type as Kind, row: r })}
                 onDelete={() => setRemoving({ col: "storeMoves", e: r })}
+                photoCount={r.type === "INWARD" ? photos.filter((p) => p.refKey === refKey("storeMoves", r.id)).length : null}
+                onPhotos={() => setPhotoFor({ refId: r.id, title: `Bill photo — ${r.itemName ?? iName(r.itemId)}`, label: `Bill ${r.billNo ?? r.itemName ?? ""}` })}
               />
             ))}
           </section>
@@ -217,6 +222,7 @@ export function Store() {
           onClose={() => setForm(null)}
         />
       )}
+      {photoFor && <PhotoDialog pid={current.id} date={date} photos={photos} refCol="storeMoves" onClose={() => setPhotoFor(null)} {...photoFor} />}
       {service && <ServiceForm row={service.row} tag={service.tag} itemId={service.itemId} date={date} items={items} onClose={() => setService(null)} />}
       {removing && (
         <ReasonDialog
@@ -238,7 +244,9 @@ function sinceOf(summary: Summary | null | undefined, a: Extract<StoreAlert, { k
   return summary?.holdings.find((h) => h.contractorId === a.contractorId && h.itemId === a.itemId)?.since ?? summary?.asOf ?? "";
 }
 
-function MoveRow({ r, unit, itemName, cName, open, onEdit, onDelete }: {
+function MoveRow({ r, unit, itemName, cName, open, onEdit, onDelete, photoCount, onPhotos }: {
+  photoCount: number | null;
+  onPhotos: () => void;
   r: Entry;
   unit: string;
   itemName: string;
@@ -287,6 +295,11 @@ function MoveRow({ r, unit, itemName, cName, open, onEdit, onDelete }: {
             <button className="btn sm" onClick={onEdit} aria-label="Edit">✎</button>
             <button className="btn sm danger" onClick={onDelete} aria-label="Delete">🗑</button>
           </span>
+        )}
+        {photoCount !== null && (
+          <button className="btn sm" onClick={onPhotos} aria-label="Bill photo">
+            📷 Bill {photoCount || ""}
+          </button>
         )}
         {fromServer && <span className="small muted">Edit at the sending site</span>}
       </div>
@@ -776,7 +789,7 @@ function MoveForm({ kind, row, preset, date, items, contractors, summary, onClos
           <label htmlFor="m-rm">Remark</label>
           <input id="m-rm" className="input" value={v.remark} onChange={set("remark")} />
         </div>
-        {kind === "INWARD" && <p className="small muted">Bill photo: coming with site photos (Daily Work).</p>}
+        {kind === "INWARD" && <p className="small muted">Bill photo: after saving, tap 📷 Bill on the entry.</p>}
         {row && (
           <div className="field">
             <label htmlFor="m-why">Reason for change *</label>

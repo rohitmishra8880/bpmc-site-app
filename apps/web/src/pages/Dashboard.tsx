@@ -1,7 +1,7 @@
 import { doc, onSnapshot } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { formatDate, formatHours, formatQty, formatQtyShort, toBusinessDateIST, type DayItemBalance, type StoreAlert } from "@bpmc/core";
+import { formatDate, formatHours, formatQty, formatQtyShort, toBusinessDateIST, type DayItemBalance, type StoreAlert, type WorkTotals, type WorkType } from "@bpmc/core";
 import { useProfile } from "../lib/auth";
 import { db } from "../lib/firebase";
 import { useMaster } from "../lib/masters";
@@ -14,7 +14,10 @@ interface DayDoc {
   machineTotals?: { running: number; breakdown: number; hours: number; dieselLtr: number };
   labour?: { totals: { mistri: number; kuli: number; reja: number; total: number } };
   staff?: { present: number; halfDay: number; absent: number; marked: number };
+  work?: WorkTotals;
 }
+
+const WORK_ORDER: [WorkType, string][] = [["CONCRETE", "Concrete"], ["EXCAVATION", "Excavation"], ["SHUTTERING", "Shuttering"], ["STEEL", "Steel"]];
 
 /** Dashboard v3 — light: safed card + rangeen border; dark: gradient + glow (Rohit ki image). Har number server ke hisab se. */
 export function Dashboard() {
@@ -57,6 +60,7 @@ export function Dashboard() {
   const iName = (id: string) => storeItems.find((i) => i.id === id)?.name ?? id;
   const cName = (id: string) => (id === "COMPANY" ? "Company (own labour)" : (contractors.find((c) => c.id === id)?.name ?? id));
   const storeAlerts = store?.alerts ?? [];
+  const workParts = WORK_ORDER.flatMap(([k, label]) => (day?.work?.byType?.[k] ? [{ label, qty: day.work.byType[k]!.qty, unit: day.work.byType[k]!.unit }] : []));
 
   return (
     <>
@@ -86,8 +90,20 @@ export function Dashboard() {
         </Link>
         <Link className="kpi t-teal" to="/work">
           <span className="lab">Work progress</span>
-          <span className="num">—</span>
-          <span className="foot">Daily Work coming in Phase 2</span>
+          {workParts.length ? (
+            <>
+              <span className="num">
+                {formatQtyShort(workParts[0]!.qty)}
+                <small>{workParts[0]!.unit} {workParts[0]!.label.toLowerCase()}</small>
+              </span>
+              <span className="foot">{workParts.length > 1 ? workParts.slice(1).map((x) => `${x.label} ${formatQtyShort(x.qty)} ${x.unit}`).join(" · ") : "Today"}</span>
+            </>
+          ) : (
+            <>
+              <span className="num">—</span>
+              <span className="foot">No work entered today</span>
+            </>
+          )}
           <span className="deco" aria-hidden="true" style={{ fontSize: 44, opacity: 0.5 }}>📐</span>
         </Link>
         <Link className={`kpi t-violet ${mt?.breakdown ? "alarm" : ""}`} to="/machinery">
@@ -123,7 +139,7 @@ export function Dashboard() {
       )}
 
       <div className="dash-mods">
-        <Mod tone="t-sky" to="/work" ic="📅" title="Daily Work" sub="M³, Sq M, Kg, photos" soon />
+        <Mod tone="t-sky" to="/work" ic="📅" title="Daily Work" sub="M³, Sq M, Kg, photos" />
         <Mod tone="t-orange" to="/inventory" ic="📦" title="Inventory" sub="Received, used, balance" />
         <Mod tone="t-mint" to="/store" ic="🧰" title="Store Register" sub="Tools issued / returned" />
         <Mod tone="t-purple" to="/attendance" ic="👥" title="Attendance" sub="Staff + contractor muster" />

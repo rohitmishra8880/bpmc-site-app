@@ -18,3 +18,5 @@ export * from "./statement";
 export * from "./store";
 export * from "./report";
 export * from "./creditor";
+export * from "./work";
+export * from "./photo";

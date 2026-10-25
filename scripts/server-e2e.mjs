@@ -18,6 +18,24 @@ function http(method, url, body) {
   return { code: Number(out.slice(i + 1)), text: out.slice(0, i) };
 }
 
+// ---- nakli Google Drive (folder tree memory mein) ----
+function makeDrive() {
+  const files = new Map();
+  const mk = (name, path) => {
+    const kids = new Map();
+    const f = {
+      name, path, kids,
+      getFoldersByName: (n) => { const k = kids.get(n); const a = k ? [k] : []; return { hasNext: () => a.length > 0, next: () => a.shift() }; },
+      createFolder: (n) => { const c = mk(n, path + "/" + n); kids.set(n, c); return c; },
+      createFile: (blob) => { const id = "file_" + (files.size + 1); const file = { id, name: blob.name, path: path + "/" + blob.name, blob, getId: () => id, getName: () => blob.name, getBlob: () => blob }; files.set(id, file); return file; },
+    };
+    return f;
+  };
+  const root = mk("root", "");
+  root.createFolder("AI obsidian");
+  return { getRootFolder: () => root, getFileById: (id) => { if (!files.has(id)) throw new Error("no file " + id); return files.get(id); }, _files: files };
+}
+
 // ---- Apps Script stubs ----
 const logs = [];
 const sandbox = {
@@ -32,7 +50,16 @@ const sandbox = {
   ScriptApp: { getOAuthToken: () => "owner" },
   PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => (k === "FIREBASE_PROJECT_ID" ? PROJECT : null) }) },
   LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock: () => {} }) },
-  Utilities: { formatDate: (d) => d.toISOString().replace(/[-:]/g, "").slice(0, 15), getUuid: () => Math.random().toString(36).slice(2) },
+  Utilities: {
+    formatDate: (d) => d.toISOString().replace(/[-:]/g, "").slice(0, 15),
+    getUuid: () => Math.random().toString(36).slice(2),
+    base64Decode: (b64) => [...Buffer.from(b64, "base64")],
+    base64Encode: (bytes) => Buffer.from(bytes).toString("base64"),
+    newBlob: (bytes, mime, name) => ({ bytes, mime, name, getBytes: () => bytes, getContentType: () => mime, getName: () => name }),
+  },
+  ContentService: { MimeType: { JSON: "json" }, createTextOutput: (t) => ({ text: t, setMimeType() { return this; } }) },
+  MimeType: { PLAIN_TEXT: "text/plain" },
+  DriveApp: makeDrive(),
   Session: { getActiveUser: () => ({ getEmail: () => "test@bpmc" }) },
 };
 vm.createContext(sandbox);
@@ -114,6 +141,23 @@ put("masters_parties/hpcl", { name: "HPCL", creditDays: 7, deleted: null });
 put("masters_parties/sharma", { name: "Sharma Hardware", creditDays: 30, deleted: null });
 put("projects/KSK/ledger/LB1", P({ businessDate: B.addDays(today, -10), type: "BILL", partyId: "hpcl", partyName: "HPCL", amountPaise: 1000000, billNo: "HP-OLD" }));
 put("projects/KSK/ledger/LP1", P({ businessDate: today, type: "PAYMENT", partyId: "hpcl", partyName: "HPCL", amountPaise: 500000, mode: "NEFT", accountId: "sbi", refNo: "UTR1" }));
+
+// Daily Work (Kondagaon): Suraj ko 120.5 M³ concrete ₹6,500 + shuttering; Company ka apna steel; hataayi entry
+put("projects/KDG", { name: "Kondagaon — Pawada Anicut", vault: "kondagaon" });
+const KP = (o) => ({ ...P(o), projectId: "KDG" });
+put("projects/KDG/workEntries/K1", KP({ businessDate: today, type: "CONCRETE", contractorId: "suraj", contractorName: "Suraj", zone: "Pier P1", l: 10, w: 5, h: 2.41, nos: 1, qty: 120.5, unit: "M³", ratePaise: 650000 }));
+put("projects/KDG/workEntries/K2", KP({ businessDate: today, type: "SHUTTERING", contractorId: "suraj", contractorName: "Suraj", l: 12, w: 3, nos: 2, qty: 72, unit: "Sq M", ratePaise: 35000 }));
+put("projects/KDG/workEntries/K3", KP({ businessDate: today, type: "STEEL", contractorId: "COMPANY", diaMm: 16, lengthM: 12, nos: 10, qty: 189.6, unit: "Kg", ratePaise: 1100 }));
+put("projects/KDG/workEntries/K4", KP({ businessDate: today, type: "CONCRETE", contractorId: "hemlal", qty: 5, unit: "M³", ratePaise: 650000, deleted: { by: "x", reason: "galti" } }));
+put("projects/KDG/workEntries/K5", KP({ businessDate: today, type: "EXCAVATION", contractorId: "hemlal", contractorName: "Hemlal", qty: 18, unit: "M³", ratePaise: 0 }));
+
+// Photos: users / roles
+put("roles/site", { permissions: ["entry.create", "entry.edit"] });
+put("users/admin@bpmc", { active: true, role: "admin", projectIds: [] });
+put("users/munshi@bpmc", { active: true, role: "site", projectIds: ["KSK"] });
+put("users/other@bpmc", { active: true, role: "site", projectIds: ["DNT"] });
+put("users/old@bpmc", { active: false, role: "site", projectIds: ["KSK"] });
+put("projects/KSK/photos/PH9", P({ businessDate: today, refCol: "workEntries", refId: "K1", driveFileId: "file_x", mime: "image/jpeg", label: "Footing" }));
 
 // ---- chalao ----
 S.runHisab();
@@ -209,6 +253,40 @@ S.runHisab();
 const ls2 = get("projects/KSK/ledgerSummary/current")?.data;
 expect("Creditors: dena (bakaya) aur lena (thekedar se) alag — mila ke nahi", [ls2?.totals?.bakayaPaise, ls2?.totals?.toRecoverPaise], [5870000 + 1770000, 90000]);
 expect("Manual bill / payment DONE", ["ledger/LB1", "ledger/LP1"].map((x) => get(`projects/KSK/${x}`).data.serverStatus), ["DONE", "DONE"]);
+
+const wd = get(`projects/KDG/days/${today}`)?.data?.work;
+expect("Work: aaj Concrete 120.5 M³, Shuttering 72 Sq M, Steel 189.6 Kg, Excavation 18 M³ (hataayi nahi)", [wd?.byType?.CONCRETE?.qty, wd?.byType?.SHUTTERING?.qty, wd?.byType?.STEEL?.qty, wd?.byType?.EXCAVATION?.qty], [120.5, 72, 189.6, 18]);
+expect("Work: Suraj ka bill = ₹7,83,250 + ₹25,200 = ₹8,08,450", wd?.byContractor?.suraj?.amountPaise, 80845000 + 0 - 0);
+expect("Work: bill hone wala kul (COMPANY nahi)", wd?.billablePaise, 80845000);
+const wb = get("projects/KDG/ledger/wk_K1")?.data;
+expect("Work: Suraj ke khate mein BILL ₹7,83,250 (kaam, naap ke saath)", [wb?.type, wb?.partyId, wb?.partyKind, wb?.amountPaise, wb?.source], ["BILL", "suraj", "CONTRACTOR", 78325000, "workEntries/K1"]);
+expect("Work: Company ka kaam / bina rate / hataayi entry — bill nahi", ["K3", "K4", "K5"].map((k) => get(`projects/KDG/ledger/wk_${k}`)), [null, null, null]);
+expect("Work: thekedar ka kul bakaya (Creditors)", get("projects/KDG/ledgerSummary/current")?.data?.parties?.suraj?.bakayaPaise, 80845000);
+expect("Work entries DONE", ["K1", "K3", "K5"].map((k) => get(`projects/KDG/workEntries/${k}`).data.serverStatus), ["DONE", "DONE", "DONE"]);
+// rate badla (rev 2) → bill badla; entry hati → bill hata
+put("projects/KDG/workEntries/K1", KP({ rev: 2, businessDate: today, type: "CONCRETE", contractorId: "suraj", contractorName: "Suraj", qty: 120.5, unit: "M³", ratePaise: 700000 }));
+put("projects/KDG/workEntries/K2", KP({ rev: 2, businessDate: today, type: "SHUTTERING", contractorId: "suraj", qty: 72, unit: "Sq M", ratePaise: 35000, deleted: { by: "x", reason: "galat" } }));
+S.runHisab();
+expect("Work edit: rate ₹7,000 → bill ₹8,43,500; hataayi shuttering ka bill hata", [get("projects/KDG/ledger/wk_K1")?.data?.amountPaise, !!get("projects/KDG/ledger/wk_K2")?.data?.deleted, get(`projects/KDG/days/${today}`)?.data?.work?.byContractor?.suraj?.amountPaise], [84350000, true, 84350000]);
+
+// ---- Photos: Drive upload (doPost) ----
+const TOKENS = { good: "munshi@bpmc", adm: "admin@bpmc", out: "other@bpmc", off: "old@bpmc" };
+S.verifyIdToken_ = (t) => TOKENS[t] ?? null;
+const jpg = Buffer.from("fake-jpeg-bytes").toString("base64");
+const up = (o) => JSON.parse(S.doPost({ postData: { contents: JSON.stringify({ action: "upload", pid: "KSK", date: today, time: "10:24", label: "Concrete / Footing F1", seq: 1, mime: "image/jpeg", data: jpg, lat: 18.94568, lng: 81.35123, accuracyM: 12, takenAt: new Date().toISOString(), ...o }) } }).text);
+const good = up({ token: "good" });
+expect("Photo: member ne upload kiya → Drive mein vault\\Photos\\saal\\mahina", [good.ok, S.DriveApp._files.get(good.fileId)?.path], [true, "/AI obsidian/EMRS KESHKAL/Photos/" + today.slice(0, 4) + "/" + today.slice(5, 7) + "-" + ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][Number(today.slice(5, 7)) - 1] + "/" + today + " 1024 Concrete - Footing F1 1.jpg"]);
+expect("Photo: Admin kisi bhi project mein", up({ token: "adm", pid: "DNT" }).ok, true);
+expect("Photo: dusre project ka user nahi", [up({ token: "out" }).ok, up({ token: "out" }).error], [false, "No access to this project"]);
+expect("Photo: band (inactive) user nahi; galat token nahi", [up({ token: "off" }).ok, up({ token: "bad" }).ok], [false, false]);
+expect("Photo: sirf image, bahut badi nahi, GPS galat nahi", [up({ token: "good", mime: "application/pdf" }).ok, up({ token: "good", data: Buffer.alloc(7 * 1024 * 1024).toString("base64") }).ok, up({ token: "good", lat: 123 }).ok], [false, false, false]);
+const getP = (o) => JSON.parse(S.doPost({ postData: { contents: JSON.stringify({ action: "get", pid: "KSK", ...o }) } }).text);
+put("projects/KSK/photos/PH1", P({ businessDate: today, refCol: "workEntries", refId: "K1", driveFileId: good.fileId, mime: "image/jpeg" }));
+const gt = getP({ token: "good", fileId: good.fileId });
+expect("Photo: member apni site ki photo dekh sake (base64)", [gt.ok, gt.data, gt.mime], [true, jpg, "image/jpeg"]);
+expect("Photo: entry mein na likhi hui Drive file nahi dikhti; dusre project ka user nahi", [getP({ token: "good", fileId: "file_1" }).ok === true && !S.DriveApp._files.has("file_1"), getP({ token: "out", fileId: good.fileId }).ok], [false, false]);
+S.runHisab();
+expect("Photo entries DONE (server ne dekh liya)", ["PH9", "PH1"].map((k) => get(`projects/KSK/photos/${k}`).data.serverStatus), ["DONE", "DONE"]);
 
 console.log(fails ? `\n${fails} jaanch FAIL` : "\nSab server jaanch pass");
 process.exit(fails ? 1 : 0);

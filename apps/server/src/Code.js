@@ -148,12 +148,18 @@ function runHisab() {
       var sum = getDoc_(parent + '/storeSummary/current');
       if (pStore.length || pServ.length || (sum && sum.data.asOf !== today)) storeDirty[p.id] = 1;
       var pLedger = query_(parent, 'ledger', 'serverStatus', ENTRY_STATUS_PENDING);
+      var pWork = query_(parent, 'workEntries', 'serverStatus', ENTRY_STATUS_PENDING);
+      var pPhotos = query_(parent, 'photos', 'serverStatus', ENTRY_STATUS_PENDING);
       // Bakaya udhaar (stock / store) aur katauti se bhi badalta hai; overdue ke din roz badalte hain
       var lsum = getDoc_(parent + '/ledgerSummary/current');
-      if (pLedger.length || pStock.length || pStore.length || (lsum && lsum.data.asOf !== today)) ledgerDirty[p.id] = 1;
-      var all = pStock.concat(pLogs, pDeds, pMuster, pStaff, pPass, pLabAtt, pLabPass, pStore, pServ, pLedger);
+      if (pLedger.length || pStock.length || pStore.length || pWork.length || (lsum && lsum.data.asOf !== today)) ledgerDirty[p.id] = 1;
+      var all = pStock.concat(pLogs, pDeds, pMuster, pStaff, pPass, pLabAtt, pLabPass, pStore, pServ, pLedger, pWork, pPhotos);
       if (!all.length) return;
       var out = {};
+      if (pWork.length) {
+        out.work = hisabWork_(parent, p.id, pWork);
+        out.workBills = hisabWorkBills_(parent, p.id, pWork);
+      }
       if (pStore.length) {
         out.storeUdhaar = hisabUdhaar_(parent, p.id, pStore, { inType: 'INWARD', prefix: 'st_', col: 'storeMoves' });
         out.storeRecovery = hisabStoreRecovery_(parent, p.id, pStore);
@@ -324,6 +330,140 @@ function hisabLedgerSummary_(parent, ctx) {
     updateTransforms: [{ fieldPath: 'computedAt', setToServerValue: 'REQUEST_TIME' }],
   }]);
   return { parties: Object.keys(parties).length };
+}
+
+/**
+ * Daily Work: jin dino ki entry badli, un dino ka kul → days/{date}.work (type-wise, thekedar-wise, bill hone wala kul).
+ */
+function hisabWork_(parent, pid, pending) {
+  var dates = {};
+  pending.forEach(function (d) { if (d.data.businessDate) dates[d.data.businessDate] = 1; });
+  var writes = [];
+  Object.keys(dates).forEach(function (date) {
+    var rows = rangeQuery_(parent, 'workEntries', 'businessDate', date, date)
+      .filter(function (d) { return d.data.type && d.data.contractorId; })
+      .map(function (d) {
+        var x = d.data;
+        return { id: d.id, businessDate: x.businessDate, type: x.type, qty: Number(x.qty) || 0, unit: x.unit, contractorId: x.contractorId, ratePaise: x.ratePaise || 0, deleted: !!x.deleted };
+      });
+    var t = BPMCCore.workTotals(rows);
+    writes.push({
+      update: { name: fullName_(parent + '/days/' + date), fields: { work: enc_(t), date: enc_(date) } },
+      updateMask: { fieldPaths: ['work', 'date'] },
+      updateTransforms: [{ fieldPath: 'workComputedAt', setToServerValue: 'REQUEST_TIME' }],
+    });
+  });
+  if (writes.length) commit_(writes);
+  return { days: writes.length };
+}
+
+/** Thekedar ke kaam ka bill → uske khate mein BILL (ledger/wk_<entryId>). COMPANY / bina rate / hataayi entry → bill nahi (ya hata). */
+function hisabWorkBills_(parent, pid, pending) {
+  var writes = [];
+  var now = new Date();
+  pending.forEach(function (d) {
+    var m = d.data;
+    var path = parent + '/ledger/wk_' + d.id;
+    var existing = getDoc_(path);
+    var amount = BPMCCore.workAmount(Number(m.qty) || 0, m.ratePaise || 0);
+    var want = !m.deleted && m.contractorId && m.contractorId !== 'COMPANY' && amount > 0;
+    if (!want) {
+      if (existing && !existing.data.deleted) writes.push(serverSoftDelete_(path, existing, m.deleted ? 'Work entry was deleted' : 'No longer billable'));
+      return;
+    }
+    writes.push({
+      update: {
+        name: fullName_(path),
+        fields: encFields_({
+          projectId: pid, businessDate: m.businessDate, type: 'BILL', partyId: m.contractorId, partyKind: 'CONTRACTOR', partyName: m.contractorName || null,
+          amountPaise: amount, basePaise: amount, gstPaise: 0, itemName: (m.workLabel || m.type) + (m.zone ? ' · ' + m.zone : ''), qty: m.qty, unit: m.unit || null,
+          ratePaise: m.ratePaise, description: 'Work measurement', source: 'workEntries/' + d.id, remark: m.remark || null,
+          deleted: null, serverStatus: 'DONE', createdBy: existing ? existing.data.createdBy : 'server', createdAt: existing ? existing.data.createdAt : now,
+          updatedBy: 'server', updatedAt: now, rev: existing ? (existing.data.rev || 1) + 1 : 1, lastAuditId: null,
+        }),
+      },
+    });
+  });
+  if (writes.length) commit_(writes);
+  return writes.length;
+}
+
+// ---------------- Site photos → Google Drive (vault\Photos\saal\mahina) ----------------
+// Phone ID token ke saath yahan POST karta hai (Firebase Storage Spark par nahi milta). Token Google se verify hota hai,
+// phir users/{email} aur project ka access dekha jaata hai. Drive mein sirf wahi file padhi jaati hai jo photos entry mein likhi ho.
+var PHOTO_MAX_BYTES = 6 * 1024 * 1024;
+var PHOTO_MIMES = ['image/jpeg', 'image/png', 'image/webp'];
+
+function doGet() {
+  return json_({ ok: true, service: 'BPMC photos' });
+}
+
+function doPost(e) {
+  try {
+    var body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+    var email = verifyIdToken_(body.token);
+    if (!email) return json_({ ok: false, error: 'Please sign in again' });
+    if (!body.pid || !canUseProject_(email, body.pid, body.action === 'upload')) return json_({ ok: false, error: 'No access to this project' });
+    if (body.action === 'upload') return json_(photoUpload_(email, body));
+    if (body.action === 'get') return json_(photoGet_(body));
+    return json_({ ok: false, error: 'Unknown action' });
+  } catch (err) {
+    return json_({ ok: false, error: String(err && err.message || err) });
+  }
+}
+
+function json_(o) {
+  return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
+}
+
+/** Firebase ID token → verified email (nahi to null) */
+function verifyIdToken_(token) {
+  if (!token) return null;
+  var key = PropertiesService.getScriptProperties().getProperty('FIREBASE_WEB_API_KEY');
+  if (!key) throw new Error('Server setup missing: FIREBASE_WEB_API_KEY');
+  var res = UrlFetchApp.fetch('https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=' + encodeURIComponent(key), {
+    method: 'post', contentType: 'application/json', payload: JSON.stringify({ idToken: token }), muteHttpExceptions: true,
+  });
+  if (res.getResponseCode() !== 200) return null;
+  var u = (JSON.parse(res.getContentText()).users || [])[0];
+  return u && u.emailVerified && u.email ? String(u.email).toLowerCase() : null;
+}
+
+/** firestore.rules ke member() jaisa: active user, Admin ya project ka member; upload ke liye entry.create bhi */
+function canUseProject_(email, pid, needCreate) {
+  var u = getDoc_('users/' + email);
+  if (!u || u.data.active !== true) return false;
+  if (u.data.role === 'admin') return true;
+  if ((u.data.projectIds || []).indexOf(pid) < 0) return false;
+  if (!needCreate) return true;
+  var role = getDoc_('roles/' + u.data.role);
+  return !!role && (role.data.permissions || []).indexOf('entry.create') >= 0;
+}
+
+function photoUpload_(email, b) {
+  if (PHOTO_MIMES.indexOf(b.mime) < 0) return { ok: false, error: 'Only JPEG / PNG / WebP photos' };
+  if (!BPMCCore.isBusinessDate(b.date || '')) return { ok: false, error: 'Bad date' };
+  var errs = BPMCCore.validatePhotoMeta({ lat: b.lat, lng: b.lng, takenAt: b.takenAt });
+  if (errs.length) return { ok: false, error: errs[0] };
+  if (!b.data || b.data.length > PHOTO_MAX_BYTES * 1.4) return { ok: false, error: 'Photo is too big' };
+  var bytes = Utilities.base64Decode(b.data);
+  if (!bytes.length || bytes.length > PHOTO_MAX_BYTES) return { ok: false, error: 'Photo is too big' };
+  var proj = getDoc_('projects/' + b.pid);
+  if (!proj) return { ok: false, error: 'Unknown project' };
+  var vault = proj.data.vault || proj.data.name || b.pid;
+  var folder = folderPath_(obsidianRoot_(), BPMCCore.photoFolder(vault, b.date));
+  var name = BPMCCore.photoFileName(b.date, String(b.time || '00:00'), String(b.label || ''), Number(b.seq) || 1);
+  var file = folder.createFile(Utilities.newBlob(bytes, b.mime, name));
+  return { ok: true, fileId: file.getId(), name: name, by: email };
+}
+
+function photoGet_(b) {
+  if (!b.fileId) return { ok: false, error: 'No file' };
+  // Sirf is project ki photos entry mein likhi hui file
+  var known = query_('projects/' + b.pid, 'photos', 'driveFileId', b.fileId);
+  if (!known.length) return { ok: false, error: 'Photo not found' };
+  var blob = DriveApp.getFileById(b.fileId).getBlob();
+  return { ok: true, mime: blob.getContentType(), data: Utilities.base64Encode(blob.getBytes()) };
 }
 
 /** Server ka soft-delete (reason ke saath) */

@@ -345,6 +345,32 @@ describe("store / saman register", () => {
   });
 });
 
+describe("daily work", () => {
+  it("site user kaam ki entry (naap + rate) audit ke saath bana sake; D−3 par nahi", async () => {
+    const db = dbAs(SITE);
+    const batch = writeBatch(db);
+    const base = { projectId: PID, createdBy: SITE, createdAt: serverTimestamp(), deleted: null, rev: 1, serverStatus: "PENDING" };
+    batch.set(doc(db, `projects/${PID}/workEntries/WK1`), { ...base, lastAuditId: "wk1", businessDate: TODAY, type: "CONCRETE", contractorId: "suraj", l: 10, w: 5, h: 2.41, nos: 1, qty: 120.5, unit: "M³", ratePaise: 650000 });
+    batch.set(doc(db, `projects/${PID}/auditLog/wk1`), { entity: "workEntries/WK1", action: "CREATE", rev: 1, by: SITE, at: serverTimestamp(), reason: null });
+    await assertSucceeds(batch.commit());
+    const old = writeBatch(db);
+    old.set(doc(db, `projects/${PID}/workEntries/WK2`), { ...base, lastAuditId: "wk2", businessDate: "2020-01-01", type: "STEEL", contractorId: "suraj", qty: 1, unit: "Kg" });
+    old.set(doc(db, `projects/${PID}/auditLog/wk2`), { entity: "workEntries/WK2", action: "CREATE", rev: 1, by: SITE, at: serverTimestamp(), reason: null });
+    await assertFails(old.commit());
+  });
+
+  it("server ka banaya thekedar ka kaam-bill (ledger/wk_) phone se nahi badalta", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), `projects/${PID}/ledger/wk_X`), { projectId: PID, businessDate: TODAY, type: "BILL", partyId: "suraj", amountPaise: 100, createdBy: "server", createdAt: new Date(), deleted: null, rev: 1, serverStatus: "DONE" });
+    });
+    const db = dbAs(SITE);
+    const b = writeBatch(db);
+    b.update(doc(db, `projects/${PID}/ledger/wk_X`), { amountPaise: 1, rev: 2, updatedBy: SITE, updatedAt: serverTimestamp(), serverStatus: "PENDING", lastAuditId: "wkx" });
+    b.set(doc(db, `projects/${PID}/auditLog/wkx`), { entity: "ledger/wk_X", action: "UPDATE", rev: 2, by: SITE, at: serverTimestamp(), reason: "galat rakam" });
+    await assertFails(b.commit());
+  });
+});
+
 describe("creditors / party khata", () => {
   it("site user bill aur payment (mode / account / ref) audit ke saath bana sake", async () => {
     const db = dbAs(SITE);

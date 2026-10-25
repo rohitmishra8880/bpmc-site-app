@@ -49,7 +49,10 @@
   - **Niyam:** har naye module (Daily Work → contractor ka kaam day-wise, Creditors → ledger payments, DPR) ka PDF usi waqt banega.
 - ✅ Design v3 (25 Oct 2026, Rohit ki 2 image): light = safed card + rangeen border, dark = gradient + glow; sidebar navy; andar ke saare page bhi isi mein. Dashboard par asli data ke bar / gauge, critical alerts, Reports + Creditors card.
 - ✅ Creditors / Party Ledger (25 Oct 2026, TDD): bill (GST ke saath), bhugtan (mode / account / ref), debit note; bakaya + overdue (credit period, FIFO) server `ledgerSummary/current`; dena aur lena (thekedar katauti / advance) alag; server ke bill (udhaar, katauti, transfer) phone se nahi badalte (rules); khata dialog + PDF. Tests: core 119, rules 48, server 51.
-- ⏳ Baaki Phase 2: Daily Work + Drive photos (+ uska PDF), machine rental bill → owner ka khata, `bpmc-site-live` project
+- ✅ Daily Work (25 Oct 2026, TDD): Concrete / Excavation (L × W × H × nos = M³), Shuttering (L × height × nos = Sq M), Steel (D² ÷ 162 × L × nos = Kg); rate har entry par save (us thekedar ka pichla rate bhar jaata hai); server `days.work` (type-wise, thekedar-wise, bill hone wala kul) + thekedar ka bill khud uske khate mein (`ledger/wk_`, COMPANY / bina rate / hataayi entry ka nahi); Dashboard Work Progress asli data se; day-wise PDF (Reports → Contractor work). Live run: Suraj ₹8,08,450, Hemlal ₹2,160.
+- ✅ Site photos (25 Oct 2026, TDD): phone par 1600 px JPEG, GPS + samay → Apps Script web app (Google ID token verify, project member + entry.create) → Drive `<vault>\Photos\saal\mahina\`; `photos` entry (audit, soft-delete, Drive file safe); dekhna sirf entry mein likhi file (token ke saath). Daily Work entry + "Site photos" + Store inward ke bill par 📷. **Setup:** Apps Script editor mein `setupPhotos` ek baar chalana (FIREBASE_WEB_API_KEY property); web app URL `VITE_PHOTO_URL` (.env.local). Tests: core 136, rules 50, server e2e 67.
+- ⏳ Baaki Phase 2: machine rental bill → malik ka khata, thekedar ka khata (kaam bill − advance − katauti ka statement), `bpmc-site-live` project
+- Phase 3: DPR (lock / version / PDF / WhatsApp / Obsidian md + json + pdf), alerts + notifications, Memory JSON. Phase 4: Help Center, AI, Hindi toggle, offline jaanch, weekly / monthly report, purana data.
 
 ## Phase 1 — haal (24 Oct 2026) ✅
 - ✅ core formule + jaanch (GSTIN / mobile / IFSC) — 61 tests

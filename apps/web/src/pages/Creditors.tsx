@@ -15,7 +15,7 @@ import { PaymentFields, payData, payStateValid, type PayState } from "./LabourWe
 
 type Kind = "BILL" | "PAYMENT" | "DEBIT_NOTE";
 const TYPE_LABEL: Record<string, string> = { BILL: "Bill", PAYMENT: "Payment", DEBIT_NOTE: "Debit note", RECOVERY: "Recovery" };
-const SOURCE_LABEL = (src?: string) => (src?.startsWith("stockMoves") ? "Auto · Inventory credit" : src?.startsWith("storeMoves") ? "Auto · Store" : "Auto");
+const SOURCE_LABEL = (src?: string) => (src?.startsWith("stockMoves") ? "Auto · Inventory credit" : src?.startsWith("storeMoves") ? "Auto · Store" : src?.startsWith("workEntries") ? "Auto · Daily Work" : "Auto");
 
 interface Summary {
   asOf: string;
