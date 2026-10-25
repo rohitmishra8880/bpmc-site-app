@@ -349,5 +349,4 @@ Code aaj se hi aisa banega ki shift aasaan ho: hisab `packages/core` mein (Apps 
 | Zyada limits | zyada users / sites / photos bina rukawat |
 
 Transfer ka tareeka: poora backup → test project par Blaze + migration → check → live. Khud se koi paid plan ON nahi hoga — Rohit ka OK zaroori.
-
-- ? Labour edit / Left site (purana hisab safe), payment edit / delete (2 din, phir Admin unlock), labour hafta-wise + staff mahina-wise statement (server) � TDD: core 99, rules 42, server e2e 26
+- ✅ Labour edit / Left site (purana hisab safe), payment edit / delete (2 din, phir Admin unlock), labour hafta-wise + staff mahina-wise statement (server) — TDD: core 99, rules 42, server e2e 26
