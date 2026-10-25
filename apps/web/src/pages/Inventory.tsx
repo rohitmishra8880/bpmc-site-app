@@ -9,7 +9,7 @@ import { useProjects } from "../lib/projects";
 import { Dialog, errorText, PageHead, ReasonDialog, useToast } from "../lib/ui";
 
 const GROUP_LABEL: Record<string, string> = { FUEL: "Diesel / Fuel", MATERIAL: "Material", OIL: "Oil & Lubricants" };
-const PAY: [string, string][] = [["NAKAD", "Cash"], ["UDHAAR", "Credit"], ["UPI", "UPI"], ["CHEQUE", "Cheque"]];
+export const PAY: [string, string][] = [["NAKAD", "Cash"], ["UDHAAR", "Credit"], ["UPI", "UPI"], ["CHEQUE", "Cheque"]];
 const PAY_LABEL = Object.fromEntries(PAY) as Record<string, string>;
 
 export function Inventory() {

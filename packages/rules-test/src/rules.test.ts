@@ -312,6 +312,39 @@ describe("labour attendance (naam-wise, weekly)", () => {
   });
 });
 
+describe("store / saman register", () => {
+  it("saman aaya + issue + service — site user audit ke saath bana sake", async () => {
+    const db = dbAs(SITE);
+    const batch = writeBatch(db);
+    const base = { projectId: PID, createdBy: SITE, createdAt: serverTimestamp(), deleted: null, rev: 1, serverStatus: "PENDING" };
+    batch.set(doc(db, `projects/${PID}/storeMoves/T1`), { ...base, lastAuditId: "st1", businessDate: TODAY, type: "INWARD", itemId: "rcm", qty: 2, ratePaise: 1500000, payMode: "UDHAAR", partyId: "p1" });
+    batch.set(doc(db, `projects/${PID}/storeMoves/T2`), { ...base, lastAuditId: "st2", businessDate: TODAY, type: "ISSUE", itemId: "rcm", qty: 1, contractorId: "suraj", purpose: "Footing F1" });
+    batch.set(doc(db, `projects/${PID}/storeService/V1`), { ...base, lastAuditId: "st3", businessDate: TODAY, itemId: "rcm", tag: "RCM-01", kind: "REPAIR", costPaise: 80000 });
+    batch.set(doc(db, `projects/${PID}/auditLog/st1`), { entity: "storeMoves/T1", action: "CREATE", rev: 1, by: SITE, at: serverTimestamp(), reason: null });
+    batch.set(doc(db, `projects/${PID}/auditLog/st2`), { entity: "storeMoves/T2", action: "CREATE", rev: 1, by: SITE, at: serverTimestamp(), reason: null });
+    batch.set(doc(db, `projects/${PID}/auditLog/st3`), { entity: "storeService/V1", action: "CREATE", rev: 1, by: SITE, at: serverTimestamp(), reason: null });
+    await assertSucceeds(batch.commit());
+  });
+
+  it("service entry bhi bina audit / D−3 par nahi", async () => {
+    const db = dbAs(SITE);
+    const base = { projectId: PID, createdBy: SITE, createdAt: serverTimestamp(), deleted: null, rev: 1, serverStatus: "PENDING", lastAuditId: "none", itemId: "rcm", kind: "SERVICE" };
+    await assertFails(setDoc(doc(db, `projects/${PID}/storeService/V2`), { ...base, businessDate: TODAY }));
+  });
+
+  it("stock / thekedar ke paas / item number (storeSummary, storeAssets): member padhe, likhe koi nahi", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), `projects/${PID}/storeSummary/current`), { items: {} });
+      await setDoc(doc(ctx.firestore(), `projects/${PID}/storeAssets/RCM-01`), { itemId: "rcm" });
+    });
+    await assertSucceeds(getDoc(doc(dbAs(SITE), `projects/${PID}/storeSummary/current`)));
+    await assertSucceeds(getDoc(doc(dbAs(SITE), `projects/${PID}/storeAssets/RCM-01`)));
+    await assertFails(getDoc(doc(dbAs(OTHER), `projects/${PID}/storeSummary/current`)));
+    await assertFails(setDoc(doc(dbAs(SITE), `projects/${PID}/storeSummary/current`), { items: {} }));
+    await assertFails(setDoc(doc(dbAs(ADMIN), `projects/${PID}/storeAssets/RCM-02`), { itemId: "rcm" }));
+  });
+});
+
 describe("payment badalna / hatana (labour + staff)", () => {
   async function seedPay(col: string, id: string, businessDate: string) {
     await env.withSecurityRulesDisabled(async (ctx) => {

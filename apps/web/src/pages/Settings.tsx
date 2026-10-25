@@ -8,6 +8,7 @@ interface Global {
   company?: { name?: string; state?: string; stateCode?: string };
   rental?: { shiftHours?: number; halfDayFactor?: number; idleDayFactor?: number; monthDivisor?: number };
   editWindowDays?: number;
+  store?: { overdueDays?: number };
 }
 interface BackupRun {
   id: string;
@@ -59,6 +60,14 @@ export function Settings() {
             <small>days</small>
           </span>
           <span className="foot">After that the day locks; only Admin can reopen</span>
+        </div>
+        <div className="card stat">
+          <span className="lab">Store alert</span>
+          <span className="num">
+            {g?.store?.overdueDays ?? 7}
+            <small>days</small>
+          </span>
+          <span className="foot">Item with a contractor this long → "not returned" alert{g?.store?.overdueDays == null ? " (default)" : ""}</span>
         </div>
         <div className="card stat">
           <span className="lab">Company</span>

@@ -128,7 +128,8 @@ function runHisab() {
       .filter(function (m) { return !m.data.deleted; })
       .map(function (m) { return m.id; });
 
-    var ctx = { today: today, started: started, materialIds: materialIds, machines: null, rental: null };
+    var ctx = { today: today, started: started, materialIds: materialIds, machines: null, rental: null, storeItems: null };
+    var storeDirty = {};
 
     listDocs_('projects').forEach(function (p) {
       var parent = 'projects/' + p.id;
@@ -140,18 +141,32 @@ function runHisab() {
       var pPass = query_(parent, 'staffPassbook', 'serverStatus', ENTRY_STATUS_PENDING);
       var pLabAtt = query_(parent, 'labourAttendance', 'serverStatus', ENTRY_STATUS_PENDING);
       var pLabPass = query_(parent, 'labourPassbook', 'serverStatus', ENTRY_STATUS_PENDING);
-      var all = pStock.concat(pLogs, pDeds, pMuster, pStaff, pPass, pLabAtt, pLabPass);
+      var pStore = query_(parent, 'storeMoves', 'serverStatus', ENTRY_STATUS_PENDING);
+      var pServ = query_(parent, 'storeService', 'serverStatus', ENTRY_STATUS_PENDING);
+      // "X din se" har din badalta hai — din badla to store summary dobara
+      var sum = getDoc_(parent + '/storeSummary/current');
+      if (pStore.length || pServ.length || (sum && sum.data.asOf !== today)) storeDirty[p.id] = 1;
+      var all = pStock.concat(pLogs, pDeds, pMuster, pStaff, pPass, pLabAtt, pLabPass, pStore, pServ);
       if (!all.length) return;
       var out = {};
+      if (pStore.length) {
+        out.storeUdhaar = hisabUdhaar_(parent, p.id, pStore, { inType: 'INWARD', prefix: 'st_', col: 'storeMoves' });
+        out.storeRecovery = hisabStoreRecovery_(parent, p.id, pStore);
+        out.storeTransfers = hisabStoreTransfers_(p.id, pStore, storeDirty);
+      }
       if (pStock.length) {
         out.stock = hisabStock_(parent, pStock, ctx);
-        out.udhaar = hisabUdhaar_(parent, p.id, pStock);
+        out.udhaar = hisabUdhaar_(parent, p.id, pStock, { inType: 'IN', prefix: 'sm_', col: 'stockMoves' });
       }
       if (pLogs.length || pDeds.length) out.machines = hisabMachines_(parent, pLogs, pDeds, ctx);
       if (pMuster.length || pStaff.length || pPass.length || pLabAtt.length) out.attendance = hisabAttendance_(parent, pMuster.concat(pLabAtt), pStaff, pPass, ctx);
       if (pLabAtt.length || pLabPass.length) out.labour = hisabLabour_(parent, pLabAtt, pLabPass, ctx);
       out.notMarked = markDone_(all);
       log.projects[p.id] = out;
+    });
+    // Store summary sabse aakhir mein — transfer se doosri site mein aaya maal bhi gina jaaye
+    Object.keys(storeDirty).forEach(function (pid) {
+      (log.projects[pid] = log.projects[pid] || {}).store = hisabStoreSummary_('projects/' + pid, pid, ctx);
     });
   } catch (e) {
     log.error = String(e && e.message || e);
@@ -222,20 +237,23 @@ function hisabStock_(parent, pending, ctx) {
   return { pending: pending.length, from: from, days: ledger.length };
 }
 
-/** Udhaar par aaya maal → us party ke khate mein BILL (ledger/sm_<moveId>). Entry hati / udhaar nahi rahi → bill bhi hata. */
-function hisabUdhaar_(parent, pid, pending) {
+/**
+ * Udhaar par aaya maal → us party ke khate mein BILL (ledger/<prefix><moveId>). Entry hati / udhaar nahi rahi → bill bhi hata.
+ * Inventory: { inType: IN, prefix: sm_, col: stockMoves }; Store: { inType: INWARD, prefix: st_, col: storeMoves }
+ */
+function hisabUdhaar_(parent, pid, pending, o) {
   var writes = [];
   var now = new Date();
   pending.forEach(function (d) {
     var m = d.data;
-    if (m.type !== 'IN') return;
-    var path = parent + '/ledger/sm_' + d.id;
+    if (m.type !== o.inType) return;
+    var path = parent + '/ledger/' + o.prefix + d.id;
     var existing = getDoc_(path);
     var isUdhaar = m.payMode === 'UDHAAR' && m.partyId && !m.deleted;
     if (!isUdhaar) {
       if (existing && !existing.data.deleted) {
         writes.push({
-          update: { name: fullName_(path), fields: encFields_({ deleted: { by: 'server', reason: m.deleted ? 'Stock entry was deleted' : 'No longer on credit', at: now }, rev: (existing.data.rev || 1) + 1, updatedAt: now, updatedBy: 'server' }) },
+          update: { name: fullName_(path), fields: encFields_({ deleted: { by: 'server', reason: m.deleted ? 'Entry was deleted' : 'No longer on credit', at: now }, rev: (existing.data.rev || 1) + 1, updatedAt: now, updatedBy: 'server' }) },
           updateMask: { fieldPaths: ['deleted', 'rev', 'updatedAt', 'updatedBy'] },
         });
       }
@@ -248,8 +266,8 @@ function hisabUdhaar_(parent, pid, pending) {
         fields: encFields_({
           projectId: pid, businessDate: m.businessDate, type: 'BILL', partyId: m.partyId, partyName: m.partyName || null,
           amountPaise: amt.totalPaise, basePaise: amt.basePaise, gstPaise: amt.gstPaise,
-          billNo: m.billNo || null, itemName: m.itemName || m.itemId, qty: m.qty, source: 'stockMoves/' + d.id,
-          remark: m.ratePaise ? null : 'No rate entered — amount is 0; add the rate in the stock entry',
+          billNo: m.billNo || null, itemName: m.itemName || m.itemId, qty: m.qty, source: o.col + '/' + d.id,
+          remark: m.ratePaise ? null : 'No rate entered — amount is 0; add the rate in the entry',
           deleted: null, serverStatus: 'DONE', createdBy: existing ? existing.data.createdBy : 'server', createdAt: existing ? existing.data.createdAt : now,
           updatedBy: 'server', updatedAt: now, rev: existing ? (existing.data.rev || 1) + 1 : 1, lastAuditId: null,
         }),
@@ -258,6 +276,184 @@ function hisabUdhaar_(parent, pid, pending) {
   });
   if (writes.length) commit_(writes);
   return writes.length;
+}
+
+/** Server ka soft-delete (reason ke saath) */
+function serverSoftDelete_(path, existing, reason) {
+  var now = new Date();
+  return {
+    update: { name: fullName_(path), fields: encFields_({ deleted: { by: 'server', reason: reason, at: now }, rev: (existing.data.rev || 1) + 1, updatedAt: now, updatedBy: 'server' }) },
+    updateMask: { fieldPaths: ['deleted', 'rev', 'updatedAt', 'updatedBy'] },
+  };
+}
+
+/** Toota / kho gaya saman (katauti ke saath) → thekedar ke khate mein RECOVERY (ledger/sr_<moveId>) */
+function hisabStoreRecovery_(parent, pid, pending) {
+  var writes = [];
+  var now = new Date();
+  pending.forEach(function (d) {
+    var m = d.data;
+    if (m.type !== 'RETURN' && !m.recoveryPaise) return;
+    var path = parent + '/ledger/sr_' + d.id;
+    var existing = getDoc_(path);
+    var want = m.type === 'RETURN' && !m.deleted && m.contractorId && (m.condition === 'BROKEN' || m.condition === 'LOST') && (m.recoveryPaise || 0) > 0;
+    if (!want) {
+      if (existing && !existing.data.deleted) writes.push(serverSoftDelete_(path, existing, m.deleted ? 'Entry was deleted' : 'No recovery on this return'));
+      return;
+    }
+    writes.push({
+      update: {
+        name: fullName_(path),
+        fields: encFields_({
+          projectId: pid, businessDate: m.businessDate, type: 'RECOVERY', partyId: m.contractorId, partyKind: 'CONTRACTOR', partyName: m.contractorName || null,
+          amountPaise: m.recoveryPaise, itemName: m.itemName || m.itemId, qty: m.qty, condition: m.condition, source: 'storeMoves/' + d.id,
+          remark: m.remark || null, deleted: null, serverStatus: 'DONE', createdBy: existing ? existing.data.createdBy : 'server', createdAt: existing ? existing.data.createdAt : now,
+          updatedBy: 'server', updatedAt: now, rev: existing ? (existing.data.rev || 1) + 1 : 1, lastAuditId: null,
+        }),
+      },
+    });
+  });
+  if (writes.length) commit_(writes);
+  return writes.length;
+}
+
+/**
+ * Doosri site bheja (TRANSFER_OUT) → us site mein TRANSFER_IN (projects/<to>/storeMoves/tr_<from>_<id>).
+ * Entry hati / site badli → purana TRANSFER_IN bhi hata. Jis site mein likha, uska store summary dobara.
+ */
+function hisabStoreTransfers_(pid, pending, storeDirty) {
+  var projectIds = listDocs_('projects').map(function (p) { return p.id; });
+  var writes = [];
+  var now = new Date();
+  pending.forEach(function (d) {
+    var m = d.data;
+    if (m.type !== 'TRANSFER_OUT' && !(m.rev > 1)) return;
+    projectIds.forEach(function (q) {
+      if (q === pid) return;
+      var path = 'projects/' + q + '/storeMoves/tr_' + pid + '_' + d.id;
+      var want = m.type === 'TRANSFER_OUT' && !m.deleted && m.otherProjectId === q;
+      var existing = getDoc_(path);
+      if (!want) {
+        if (existing && !existing.data.deleted) {
+          writes.push(serverSoftDelete_(path, existing, m.deleted ? 'Transfer entry was deleted at the sending site' : 'Transfer changed at the sending site'));
+          storeDirty[q] = 1;
+        }
+        return;
+      }
+      writes.push({
+        update: {
+          name: fullName_(path),
+          fields: encFields_({
+            projectId: q, businessDate: m.businessDate, type: 'TRANSFER_IN', itemId: m.itemId, itemName: m.itemName || null, unit: m.unit || null,
+            qty: m.qty, otherProjectId: pid, source: 'projects/' + pid + '/storeMoves/' + d.id, remark: m.remark || null,
+            deleted: null, serverStatus: 'DONE', createdBy: existing ? existing.data.createdBy : 'server', createdAt: existing ? existing.data.createdAt : now,
+            updatedBy: 'server', updatedAt: now, rev: existing ? (existing.data.rev || 1) + 1 : 1, lastAuditId: null,
+          }),
+        },
+      });
+      storeDirty[q] = 1;
+    });
+  });
+  if (writes.length) commit_(writes);
+  return writes.length;
+}
+
+/** Store master + "X din se wapas nahi" ki seema (settings/global.store.overdueDays, nahi to 7) */
+function loadStoreItems_(ctx) {
+  if (!ctx.storeItems) {
+    ctx.storeItems = {};
+    listDocs_('masters_storeItems').forEach(function (d) { if (!d.data.deleted) ctx.storeItems[d.id] = d.data; });
+    var g = getDoc_('settings/global');
+    ctx.storeOverdueDays = (g && g.data.store && g.data.store.overdueDays) || 7;
+  }
+}
+
+/**
+ * Project ka poora store dobara: storeSummary/current (stock, thekedar ke paas, alert),
+ * storeSummary/m_<YYYY-MM> (mahine ka statement) aur storeAssets (bade saman ke number).
+ */
+function hisabStoreSummary_(parent, pid, ctx) {
+  loadStoreItems_(ctx);
+  var docs = query_(parent, 'storeMoves');
+  var moves = docs
+    .filter(function (d) {
+      var x = d.data;
+      return x.businessDate && x.itemId && x.type && Number(x.qty) > 0 && ((x.type !== 'ISSUE' && x.type !== 'RETURN') || x.contractorId);
+    })
+    .map(function (d) {
+      var x = d.data;
+      return { id: d.id, type: x.type, itemId: x.itemId, qty: Number(x.qty), businessDate: x.businessDate, contractorId: x.contractorId || null, condition: x.condition || null, deleted: !!x.deleted };
+    });
+  var ledger = BPMCCore.storeLedger(moves);
+  var holdings = BPMCCore.contractorHoldings(moves, ctx.today);
+  var used = {};
+  Object.keys(ledger).forEach(function (id) { if (ctx.storeItems[id]) used[id] = ctx.storeItems[id]; });
+  var alerts = BPMCCore.storeAlerts(ledger, used, holdings, ctx.storeOverdueDays);
+
+  var writes = [{
+    update: { name: fullName_(parent + '/storeSummary/current'), fields: encFields_({ asOf: ctx.today, items: ledger, holdings: holdings, alerts: alerts, overdueDays: ctx.storeOverdueDays }) },
+    updateTransforms: [{ fieldPath: 'computedAt', setToServerValue: 'REQUEST_TIME' }],
+  }];
+
+  // Mahine ka statement: pehli entry ke mahine se aaj ke mahine tak (purana mahina badla to aage sab theek)
+  var first = null;
+  moves.forEach(function (m) { if (!m.deleted && (!first || m.businessDate < first)) first = m.businessDate; });
+  var months = 0;
+  if (first) {
+    for (var mo = first.slice(0, 7); mo <= ctx.today.slice(0, 7); mo = BPMCCore.addDays(mo + '-' + BPMCCore.daysInMonth(mo), 1).slice(0, 7)) {
+      var st = BPMCCore.storeStatement(moves, mo + '-01', mo + '-' + BPMCCore.daysInMonth(mo));
+      writes.push({
+        update: { name: fullName_(parent + '/storeSummary/m_' + mo), fields: encFields_({ month: mo, items: st }) },
+        updateTransforms: [{ fieldPath: 'computedAt', setToServerValue: 'REQUEST_TIME' }],
+      });
+      months++;
+    }
+  }
+
+  var tags = hisabStoreAssets_(parent, moves, docs, ctx, writes);
+  commit_(writes);
+  return { moves: moves.length, alerts: alerts.length, months: months, newTags: tags };
+}
+
+/** Bade saman (master mein tagPrefix) ke har nag ka number: RCM-01, RCM-02 … Entry hati / qty ghati → number CANCELLED (dobara kabhi nahi diya jaata). */
+function hisabStoreAssets_(parent, moves, docs, ctx, writes) {
+  var assets = listDocs_(parent + '/storeAssets');
+  var byMove = {};
+  var tagsByPrefix = {};
+  assets.forEach(function (a) {
+    var pre = a.id.replace(/-\d+$/, '');
+    (tagsByPrefix[pre] = tagsByPrefix[pre] || []).push(a.id);
+    if (a.data.status !== 'CANCELLED') (byMove[a.data.inwardMoveId] = byMove[a.data.inwardMoveId] || []).push(a.id);
+  });
+  var names = {};
+  docs.forEach(function (d) { names[d.id] = d.data.itemName; });
+  var now = new Date();
+  var added = 0;
+  moves.forEach(function (m) {
+    if (m.type !== 'INWARD') return;
+    var item = ctx.storeItems[m.itemId];
+    var prefix = item && item.tagPrefix;
+    var mine = (byMove[m.id] || []).sort(function (a, b) { return a.localeCompare(b, 'en', { numeric: true }); });
+    var want = m.deleted || !prefix ? 0 : Math.floor(m.qty);
+    if (mine.length < want) {
+      BPMCCore.assignTags(prefix, tagsByPrefix[prefix] || [], want - mine.length).forEach(function (tag) {
+        (tagsByPrefix[prefix] = tagsByPrefix[prefix] || []).push(tag);
+        writes.push({
+          update: { name: fullName_(parent + '/storeAssets/' + tag), fields: encFields_({ tag: tag, itemId: m.itemId, itemName: names[m.id] || (item && item.name) || m.itemId, inwardMoveId: m.id, businessDate: m.businessDate, status: 'ACTIVE', createdAt: now }) },
+          currentDocument: { exists: false },
+        });
+        added++;
+      });
+    } else {
+      mine.slice(want).forEach(function (tag) {
+        writes.push({
+          update: { name: fullName_(parent + '/storeAssets/' + tag), fields: encFields_({ status: 'CANCELLED', cancelledAt: now, cancelReason: m.deleted ? 'Inward entry was deleted' : 'Inward quantity reduced' }) },
+          updateMask: { fieldPaths: ['status', 'cancelledAt', 'cancelReason'] },
+        });
+      });
+    }
+  });
+  return added;
 }
 
 /** Machine: din ka hisab (days/{date}.machines) + mahine ka bill (machineBills/{machine}_{YYYY-MM}) */
@@ -555,7 +751,7 @@ function installTriggers() {
 var OBSIDIAN_ROOT = 'AI obsidian';
 var PROJECT_COLLECTIONS = ['stockMoves', 'machineLogs', 'machineDeductions', 'labourMuster', 'staffAttendance', 'staffPassbook',
   'workEntries', 'storeMoves', 'ledger', 'photos', 'auditLog', 'unlocks', 'days', 'machineBills',
-  'labour', 'labourAttendance', 'labourPassbook', 'labourBalances', 'labourWeeks', 'staffBalances'];
+  'labour', 'labourAttendance', 'labourPassbook', 'labourBalances', 'labourWeeks', 'staffBalances', 'storeService', 'storeSummary', 'storeAssets'];
 var GLOBAL_COLLECTIONS = ['users', 'roles', 'settings', 'projects', 'masters_materials', 'masters_machines', 'masters_contractors',
   'masters_parties', 'masters_storeItems', 'masters_staff', 'masters_companyAccounts', 'auditLog'];
 

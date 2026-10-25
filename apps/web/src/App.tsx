@@ -13,6 +13,7 @@ import { Masters } from "./pages/Masters";
 import { Projects } from "./pages/Projects";
 import { RecycleBin } from "./pages/RecycleBin";
 import { Settings } from "./pages/Settings";
+import { Store } from "./pages/Store";
 import { Users } from "./pages/Users";
 
 function Gate() {
@@ -30,7 +31,7 @@ function Gate() {
           <Route path="users" element={<Users />} />
           <Route path="history" element={<EditHistory />} />
           <Route path="inventory" element={<Inventory />} />
-          <Route path="store" element={<Soon title="Store Register" phase="Phase 2" what="Tools and materials — received, issued to contractors, returned" />} />
+          <Route path="store" element={<Store />} />
           <Route path="machinery" element={<Machinery />} />
           <Route path="attendance" element={<Attendance />} />
           <Route path="work" element={<Soon title="Daily Work" phase="Phase 2" what="Concrete M³, shuttering Sq M, steel Kg, photos" />} />

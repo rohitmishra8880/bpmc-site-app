@@ -42,7 +42,9 @@
   - **Har payment / advance ke saath:** tarikh, rakam, mode (Cash / UPI / NEFT / RTGS / Cheque), kis company account se, ref no. / cheque no., remark. Naya master: **Company bank accounts**.
   - **Hafte ka bhugtan:** har labour: kamai − advance = dena → "Pay" entry.
   - TDD: core (weekly din / OT / amount / dena), rules, server e2e — pehle fail, phir code.
-- ⏳ Baaki Phase 2: Labour attendance (upar wala design), Store / Saman Register, Daily Work + Drive photos, Creditors
+- ✅ Store / Saman Register (25 Oct 2026, TDD): aaya (rate + GST + party + payment + bill + gaadi + samay), thekedar ko issue, wapas (Theek / Kharab / Toota / Kho gaya), kharch, doosri site transfer (us site ka TRANSFER_IN server banata hai), bade saman ke number (RCM-01, master ka prefix), service / repair history, consumable limit + "X din se wapas nahi" alert (Settings `store.overdueDays`, default 7), mahine ka statement (server `storeSummary/m_YYYY-MM`). Udhaar → party khate mein bill (`ledger/st_`); toota / kho gaya → thekedar ki katauti (`ledger/sr_`, default qty × aakhri kharid rate, badal sakte hain). Tests: core 109, rules 45, server e2e 44.
+  - Baaki: bill ki photo (Daily Work ke photo ke saath — Drive); transfer sirf un site mein jo user ko dikhti hain.
+- ⏳ Baaki Phase 2: Daily Work + Drive photos, Creditors
 
 ## Phase 1 — haal (24 Oct 2026) ✅
 - ✅ core formule + jaanch (GSTIN / mobile / IFSC) — 61 tests

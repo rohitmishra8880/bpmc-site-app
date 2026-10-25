@@ -8,7 +8,7 @@ import { db } from "./firebase";
 export type EntryCol =
   | "stockMoves" | "machineLogs" | "machineDeductions" | "labourMuster" | "staffAttendance"
   | "staffPassbook" | "workEntries" | "storeMoves" | "ledger" | "photos"
-  | "labourAttendance" | "labourPassbook";
+  | "labourAttendance" | "labourPassbook" | "storeService";
 
 export interface Entry extends DocumentData {
   id: string;

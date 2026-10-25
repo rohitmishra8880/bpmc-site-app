@@ -158,7 +158,7 @@ service cloud.firestore {
         function isEntryCol() {
           return col in ['stockMoves', 'machineLogs', 'machineDeductions', 'labourMuster', 'staffAttendance',
                          'staffPassbook', 'workEntries', 'storeMoves', 'ledger', 'photos',
-                         'labourAttendance', 'labourPassbook'];
+                         'labourAttendance', 'labourPassbook', 'storeService'];
         }
         function nd() {
           return request.resource.data;
@@ -269,6 +269,15 @@ service cloud.firestore {
       }
       // Staff ka khata (kamai − diya) — server ka hisab
       match /staffBalances/{staffId} {
+        allow read: if member(pid);
+        allow write: if false;
+      }
+      // Store: stock, thekedar ke paas, alert (storeSummary) aur bade saman ke number (storeAssets) — server
+      match /storeSummary/{id} {
+        allow read: if member(pid);
+        allow write: if false;
+      }
+      match /storeAssets/{tag} {
         allow read: if member(pid);
         allow write: if false;
       }

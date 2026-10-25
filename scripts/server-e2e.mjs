@@ -91,6 +91,24 @@ put("projects/KSK/labourMuster/C1", P({ businessDate: "2026-10-19", contractorId
 put("projects/KSK/labourMuster/C2", P({ businessDate: "2026-10-19", contractorId: "hemlal", mistri: 2, kuli: 8, reja: 0 }));
 put("projects/KSK/labourPassbook/LP1", P({ businessDate: "2026-10-20", labourId: "R1", kind: "ADVANCE", amountPaise: 50000, mode: "CASH" }));
 
+// Store / Saman Register
+put("projects/DNT", { name: "EMRS Dantewada", vault: "EMRS DANTEWADA NBCC" });
+put("masters_storeItems/rcm", { name: "Rod cutter machine", category: "RETURNABLE", unit: "Nos", tagPrefix: "RCM", deleted: null });
+put("masters_storeItems/sheet", { name: "Sheet", category: "RETURNABLE", unit: "Nos", deleted: null });
+put("masters_storeItems/pipe", { name: "GI pipe", category: "CONSUMABLE", unit: "Mtr", minStock: 20, deleted: null });
+const dAgo = (n) => B.addDays(today, -n);
+put("projects/KSK/storeMoves/S1", P({ businessDate: dAgo(10), type: "INWARD", itemId: "rcm", itemName: "Rod cutter machine", qty: 2, ratePaise: 1500000, gstPct: 18, payMode: "UDHAAR", partyId: "sharma", partyName: "Sharma Hardware", billNo: "SH-77" }));
+put("projects/KSK/storeMoves/S2", P({ businessDate: dAgo(10), type: "ISSUE", itemId: "rcm", qty: 1, contractorId: "suraj", purpose: "Footing" }));
+put("projects/KSK/storeMoves/S3", P({ businessDate: dAgo(3), type: "INWARD", itemId: "sheet", qty: 40, ratePaise: 90000, payMode: "NAKAD" }));
+put("projects/KSK/storeMoves/S4", P({ businessDate: dAgo(2), type: "ISSUE", itemId: "sheet", qty: 24, contractorId: "suraj" }));
+put("projects/KSK/storeMoves/S5", P({ businessDate: dAgo(1), type: "RETURN", itemId: "sheet", qty: 10, contractorId: "suraj", condition: "OK" }));
+put("projects/KSK/storeMoves/S6", P({ businessDate: dAgo(1), type: "RETURN", itemId: "sheet", itemName: "Sheet", qty: 2, contractorId: "suraj", contractorName: "Suraj", condition: "BROKEN", recoveryPaise: 120000 }));
+put("projects/KSK/storeMoves/S7", P({ businessDate: today, type: "INWARD", itemId: "pipe", qty: 60, ratePaise: 25000, payMode: "UPI" }));
+put("projects/KSK/storeMoves/S8", P({ businessDate: today, type: "CONSUME", itemId: "pipe", qty: 38, purpose: "Water line" }));
+put("projects/KSK/storeMoves/S9", P({ businessDate: today, type: "TRANSFER_OUT", itemId: "pipe", itemName: "GI pipe", qty: 5, otherProjectId: "DNT" }));
+put("projects/KSK/storeMoves/S10", P({ businessDate: today, type: "INWARD", itemId: "rcm", qty: 1, payMode: "NAKAD", deleted: { by: "x", reason: "galti" } }));
+put("projects/KSK/storeService/V1", P({ businessDate: today, itemId: "rcm", tag: "RCM-01", kind: "REPAIR", costPaise: 80000, remark: "Blade changed" }));
+
 // ---- chalao ----
 S.runHisab();
 
@@ -137,6 +155,41 @@ expect("19 Oct gin-ti: naam-wise (Company 1 Kuli, Suraj 1 Mistri) + Hemlal gin-t
 expect("22 Oct: Ramu Absent → 0", get("projects/KSK/days/2026-10-22")?.data?.labour?.totals?.total, 0);
 expect("Labour entries DONE", ["labourAttendance/W1", "labourPassbook/LP1"].map((p) => get(`projects/KSK/${p}`).data.serverStatus), ["DONE", "DONE"]);
 expect("Attendance entries DONE", ["labourMuster/LM2", "staffAttendance/SA1", "staffPassbook/SP1"].map((p) => get(`projects/KSK/${p}`).data.serverStatus), ["DONE", "DONE", "DONE"]);
+
+const ss = get("projects/KSK/storeSummary/current")?.data;
+expect("Store: Rod cutter 2 aaye (1 hataayi entry nahi), 1 Suraj ko → store 1, Suraj ke paas 1", [ss?.items?.rcm?.inStore, ss?.items?.rcm?.withContractors], [1, 1]);
+expect("Store: Sheet 40 − 24 + 10 theek = 26 store; Suraj ke paas 24 − 10 − 2 toote = 12", [ss?.items?.sheet?.inStore, ss?.items?.sheet?.withContractors, ss?.items?.sheet?.broken], [26, 12, 2]);
+expect("Store: GI pipe 60 − 38 − 5 transfer = 17", ss?.items?.pipe?.inStore, 17);
+expect("Thekedar ke paas: Suraj — Rod cutter 1 (10 din), Sheet 12 (2 din)", ss?.holdings, [
+  { contractorId: "suraj", itemId: "rcm", qty: 1, since: dAgo(10), days: 10 },
+  { contractorId: "suraj", itemId: "sheet", qty: 12, since: dAgo(2), days: 2 },
+]);
+expect("Alert: GI pipe 17 < 20; Rod cutter 10 din se wapas nahi", ss?.alerts, [
+  { kind: "LOW_STOCK", itemId: "pipe", qty: 17, limit: 20 },
+  { kind: "NOT_RETURNED", itemId: "rcm", contractorId: "suraj", qty: 1, days: 10 },
+]);
+expect("Mahine ka statement: GI pipe opening 0, aaya 60, kharch 38, transfer 5, closing 17", (({ openingStore, inward, consumed, transferOut, closingStore }) => ({ openingStore, inward, consumed, transferOut, closingStore }))(get(`projects/KSK/storeSummary/m_${month}`)?.data?.items?.pipe ?? {}), { openingStore: 0, inward: 60, consumed: 38, transferOut: 5, closingStore: 17 });
+expect("Item number: RCM-01, RCM-02 (S1 se); hataayi entry ka number nahi", S.listDocs_("projects/KSK/storeAssets").map((d) => [d.id, d.data.inwardMoveId, d.data.status]), [["RCM-01", "S1", "ACTIVE"], ["RCM-02", "S1", "ACTIVE"]]);
+const sb = get("projects/KSK/ledger/st_S1")?.data;
+expect("Udhaar saman → Sharma Hardware khate mein ₹35,400 (2 × ₹15,000 + 18%)", [sb?.type, sb?.partyId, sb?.amountPaise], ["BILL", "sharma", 3540000]);
+const rc = get("projects/KSK/ledger/sr_S6")?.data;
+expect("Toota saman → Suraj ke khate mein ₹1,200 katauti", [rc?.type, rc?.partyId, rc?.partyKind, rc?.amountPaise], ["RECOVERY", "suraj", "CONTRACTOR", 120000]);
+expect("Nakad saman ka bill nahi", get("projects/KSK/ledger/st_S3"), null);
+const tr = get("projects/DNT/storeMoves/tr_KSK_S9")?.data;
+expect("Transfer: Dantewada mein 5 GI pipe TRANSFER_IN (Keshkal se)", [tr?.type, tr?.qty, tr?.otherProjectId, tr?.serverStatus], ["TRANSFER_IN", 5, "KSK", "DONE"]);
+expect("Transfer: Dantewada ka stock 5", get("projects/DNT/storeSummary/current")?.data?.items?.pipe?.inStore, 5);
+expect("Store entries DONE", ["storeMoves/S1", "storeMoves/S9", "storeService/V1"].map((p) => get(`projects/KSK/${p}`).data.serverStatus), ["DONE", "DONE", "DONE"]);
+
+// ---- baad mein badlav: transfer hataya, Rod cutter qty 2 → 1, toote ki katauti hatayi ----
+put("projects/KSK/storeMoves/S9", P({ rev: 2, businessDate: today, type: "TRANSFER_OUT", itemId: "pipe", qty: 5, otherProjectId: "DNT", deleted: { by: "munshi@bpmc", reason: "galat site" } }));
+put("projects/KSK/storeMoves/S1", P({ rev: 2, businessDate: dAgo(10), type: "INWARD", itemId: "rcm", qty: 1, ratePaise: 1500000, gstPct: 18, payMode: "UDHAAR", partyId: "sharma" }));
+put("projects/KSK/storeMoves/S6", P({ rev: 2, businessDate: dAgo(1), type: "RETURN", itemId: "sheet", qty: 2, contractorId: "suraj", condition: "BROKEN", recoveryPaise: 0 }));
+S.runHisab();
+expect("Edit: transfer hataya → Dantewada ka TRANSFER_IN bhi hata, stock 0", [!!get("projects/DNT/storeMoves/tr_KSK_S9")?.data?.deleted, get("projects/DNT/storeSummary/current")?.data?.items?.pipe], [true, undefined]);
+expect("Edit: Keshkal GI pipe wapas 22 (alert hata)", [get("projects/KSK/storeSummary/current")?.data?.items?.pipe?.inStore, get("projects/KSK/storeSummary/current")?.data?.alerts?.map((a) => a.kind)], [22, ["NOT_RETURNED"]]);
+expect("Edit: Rod cutter 1 → RCM-02 CANCELLED, RCM-01 bana raha", S.listDocs_("projects/KSK/storeAssets").map((d) => [d.id, d.data.status]), [["RCM-01", "ACTIVE"], ["RCM-02", "CANCELLED"]]);
+expect("Edit: udhaar bill ₹17,700 (1 × ₹15,000 + 18%), rev 2", [get("projects/KSK/ledger/st_S1")?.data?.amountPaise, get("projects/KSK/ledger/st_S1")?.data?.rev], [1770000, 2]);
+expect("Edit: katauti 0 ki → khate se hati", !!get("projects/KSK/ledger/sr_S6")?.data?.deleted, true);
 
 console.log(fails ? `\n${fails} jaanch FAIL` : "\nSab server jaanch pass");
 process.exit(fails ? 1 : 0);

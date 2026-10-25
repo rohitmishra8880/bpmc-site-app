@@ -15,3 +15,4 @@ export * from "./machine";
 export * from "./attendance";
 export * from "./labour";
 export * from "./statement";
+export * from "./store";
