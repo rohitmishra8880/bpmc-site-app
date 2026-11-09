@@ -297,6 +297,17 @@ put("projects/KDG/machineLogs/J1", KP({ rev: 2, businessDate: today, machineId: 
 S.runHisab();
 expect("Machine bill: log hata → rental ₹0, BILL khate se hata; advance baaki (malik se lena)", [!!get(`projects/KDG/ledger/mb_jcb1_${mmonth}`)?.data?.deleted, get("projects/KDG/ledgerSummary/current")?.data?.parties?.mahavir?.bakayaPaise], [true, -300000]);
 
+// Malik baad mein joda (koi nayi machine entry nahi): din badalne par bill khate mein aa jaaye
+put("masters_machines/jcb2", { name: "Tipper 9", kind: "RENTAL", rateType: "DAY", ratePaise: 500000, ownerPartyId: "mahavir", deleted: null });
+put("projects/KDG/ledgerSummary/current", { asOf: yday, parties: {}, totals: {} });
+S.runHisab();
+expect("Machine bill: malik baad mein joda → agle din ke sync mein bill khate mein", [get(`projects/KDG/ledger/mb_jcb2_${mmonth}`)?.data?.partyId, get(`projects/KDG/ledger/mb_jcb2_${mmonth}`)?.data?.amountPaise], ["mahavir", 500000]);
+// Jis site par ledger summary bana hi nahi (sirf purana machine bill hai)
+put("projects/NEWS", { name: "New Site", vault: "NEW" });
+put(`projects/NEWS/machineBills/jcb1_${mmonth}`, { month: mmonth, machineName: "JCB 3DX", rentalPaise: 100000, deductionPaise: 0, error: null });
+S.runHisab();
+expect("Machine bill: summary na ho tab bhi sync + summary ban jaaye", [get(`projects/NEWS/ledger/mb_jcb1_${mmonth}`)?.data?.amountPaise, get("projects/NEWS/ledgerSummary/current")?.data?.parties?.mahavir?.bakayaPaise, get("projects/NEWS/ledgerSummary/current")?.data?.asOf], [100000, 100000, today]);
+
 // ---- Photos: Drive upload (doPost) ----
 const TOKENS = { good: "munshi@bpmc", adm: "admin@bpmc", out: "other@bpmc", off: "old@bpmc" };
 S.verifyIdToken_ = (t) => TOKENS[t] ?? null;

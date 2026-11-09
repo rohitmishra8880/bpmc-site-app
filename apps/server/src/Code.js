@@ -152,12 +152,12 @@ function runHisab() {
       var pPhotos = query_(parent, 'photos', 'serverStatus', ENTRY_STATUS_PENDING);
       // Bakaya udhaar (stock / store) aur katauti se bhi badalta hai; overdue ke din roz badalte hain
       var lsum = getDoc_(parent + '/ledgerSummary/current');
-      if (lsum && lsum.data.asOf !== today && !pLogs.length && !pDeds.length) {
+      if ((!lsum || lsum.data.asOf !== today) && !pLogs.length && !pDeds.length) {
         var curM = today.slice(0, 7);
         var prevM = BPMCCore.addDays(curM + '-01', -1).slice(0, 7);
         syncMachineLedger_(parent, p.id, [prevM, curM], ctx);
       }
-      if (pLedger.length || pStock.length || pStore.length || pWork.length || (lsum && lsum.data.asOf !== today)) ledgerDirty[p.id] = 1;
+      if (pLedger.length || pStock.length || pStore.length || pWork.length || !lsum || lsum.data.asOf !== today) ledgerDirty[p.id] = 1;
       var all = pStock.concat(pLogs, pDeds, pMuster, pStaff, pPass, pLabAtt, pLabPass, pStore, pServ, pLedger, pWork, pPhotos);
       if (!all.length) return;
       var out = {};
