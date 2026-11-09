@@ -20,7 +20,7 @@ export interface DprInput {
   contractors: Record<string, { name: string }>;
   machineLogs: { machineId: string; sr?: number | null; cr?: number | null; remark?: string | null; breakdownReason?: string | null; deleted?: unknown }[];
   workEntries: { type: string; contractorId: string; zone?: string | null; workLabel?: string | null; qty: number; unit: string; measure?: string | null; ratePaise?: Paise | null; deleted?: unknown }[];
-  storeMoves: { type: string; itemName: string; qty: number; unit?: string | null; contractorId?: string | null; condition?: string | null; partyName?: string | null; otherProjectName?: string | null; purpose?: string | null; deleted?: unknown }[];
+  storeMoves: { type: string; itemName: string; qty: number; unit?: string | null; contractorId?: string | null; condition?: string | null; partyName?: string | null; otherProjectName?: string | null; purpose?: string | null; time?: string | null; deleted?: unknown }[];
   creditors?: { bakayaPaise: Paise; overduePaise: Paise; toRecoverPaise?: Paise } | null;
   photos: { label?: string | null; takenAt: string; lat?: number | null; lng?: number | null; accuracyM?: number | null; driveFileId: string; deleted?: unknown }[];
 }
@@ -78,6 +78,8 @@ export function buildDpr(i: DprInput): DprSnapshot {
   });
   const store = i.storeMoves
     .filter((m) => !m.deleted)
+    .slice()
+    .sort((a, b) => String(a.time ?? "").localeCompare(String(b.time ?? "")))
     .map((m) => ({ type: m.type, item: m.itemName, qty: m.qty, unit: m.unit ?? "", who: cName(m.contractorId) || m.partyName || m.otherProjectName || "", condition: m.condition ?? null, purpose: m.purpose ?? null }));
   const photos = i.photos
     .filter((p) => !p.deleted)
@@ -227,7 +229,9 @@ export function dprHtml(d: DprSnapshot, m: DprMeta, logoDataUrl?: string | null)
   const body = dprSections(d)
     .map((s) => `<h2>${esc(s.title)}</h2><table>${s.head ? `<tr>${s.head.map((h) => `<th>${esc(h)}</th>`).join("")}</tr>` : ""}${s.rows.map((r) => `<tr>${r.map((c) => `<td>${esc(c)}</td>`).join("")}</tr>`).join("")}</table>${s.note ? `<p>${esc(s.note)}</p>` : ""}`)
     .join("");
-  const logo = logoDataUrl ? `<img src="${logoDataUrl}" style="position:fixed;top:30%;left:25%;width:50%;opacity:.07;z-index:-1">` : "";
+  // PDF banane wala fixed image sirf aakhri page par rakhta hai, isliye pehle page ke liye alag bhi
+  const mark = (pos: string) => `<img src="${logoDataUrl}" style="position:${pos};top:260px;left:25%;width:50%;opacity:.07;z-index:-1">`;
+  const logo = logoDataUrl ? mark("absolute") + mark("fixed") : "";
   return `<html><head><meta charset="utf-8"><style>body{font-family:'Noto Sans','Noto Sans Devanagari',Arial,sans-serif;font-size:11px}h1{font-size:16px;margin:0}h2{font-size:12px;margin:12px 0 4px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #999;padding:3px 5px;text-align:left}th{background:#eee}p{margin:4px 0}</style></head><body>${logo}<h1>B.P. Mishra &amp; Co.</h1><h1>${esc(title(d))}</h1>${metaLines(m).map((l) => `<p>${esc(l)}</p>`).join("")}${d.empty ? `<p><b>${esc(DPR_EMPTY_TEXT)}</b></p>` : ""}${body}</body></html>`;
 }
 

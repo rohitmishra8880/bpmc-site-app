@@ -143,3 +143,10 @@ describe("DPR fingerprint (Firestore se wapas aaye key order par nirbhar nahi)",
     expect(dprFingerprint(buildDpr(input()))).not.toBe(dprFingerprint(buildDpr(input({ creditors: { bakayaPaise: 2, overduePaise: 0 } }))));
   });
 });
+
+describe("DPR — store samay ke kram mein", () => {
+  it("10:16 wali entry 10:24 se pehle", () => {
+    const d = buildDpr(input({ storeMoves: [{ type: "CONSUME", itemName: "B", qty: 1, unit: "Nos", time: "10:24" }, { type: "INWARD", itemName: "A", qty: 1, unit: "Nos", time: "10:16" }] }));
+    expect(d.store.map((r) => r.item)).toEqual(["A", "B"]);
+  });
+});

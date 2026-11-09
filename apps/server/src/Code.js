@@ -670,7 +670,7 @@ function dprOneDate_(parent, pid, proj, date, dd, ledger, ctx) {
     }),
     storeMoves: rangeQuery_(parent, 'storeMoves', 'businessDate', date, date).sort(byId).map(function (d) {
       var x = d.data;
-      return { type: x.type, itemName: x.itemName || x.itemId, qty: Number(x.qty) || 0, unit: x.unit || null, contractorId: x.contractorId || null, condition: x.condition || null, partyName: x.partyName || null, otherProjectName: x.otherProjectName || x.otherProjectId || null, purpose: x.purpose || null, deleted: !!x.deleted };
+      return { type: x.type, itemName: x.itemName || x.itemId, qty: Number(x.qty) || 0, unit: x.unit || null, contractorId: x.contractorId || null, condition: x.condition || null, partyName: x.partyName || null, otherProjectName: x.otherProjectName || x.otherProjectId || null, purpose: x.purpose || null, time: x.time || null, deleted: !!x.deleted };
     }),
     creditors: dprCreditors_(ledger, date, ctx),
     photos: rangeQuery_(parent, 'photos', 'businessDate', date, date).sort(byId).map(function (d) {
