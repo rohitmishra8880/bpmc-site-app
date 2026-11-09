@@ -29,6 +29,7 @@ const NAV: { group: string | null; items: NavItem[] }[] = [
       { to: "/attendance", ic: "👥", label: "Attendance" },
       { to: "/work", ic: "📅", label: "Daily Work" },
       { to: "/creditors", ic: "📒", label: "Creditors / Party Ledger" },
+      { to: "/dpr", ic: "📝", label: "Daily Report (DPR)" },
       { to: "/reports", ic: "📄", label: "Reports & PDF" },
     ],
   },

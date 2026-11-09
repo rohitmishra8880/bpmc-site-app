@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { workAmount, workQuantity, workStatement, workTotals, type WorkEntryLite } from "./work";
+import { workAmount, workMeasureText, workQuantity, workStatement, workTotals, type WorkEntryLite } from "./work";
 
 const W = (o: Partial<WorkEntryLite> & Pick<WorkEntryLite, "type" | "qty">): WorkEntryLite => ({
   id: `w${Math.random()}`, businessDate: "2026-10-24", contractorId: "suraj", unit: o.type === "STEEL" ? "Kg" : o.type === "SHUTTERING" ? "Sq M" : "M³", ...o,
@@ -76,5 +76,13 @@ describe("Daily Work — thekedar ka statement (day-wise)", () => {
     expect(s.days.map((d) => [d.businessDate, d.amountPaise])).toEqual([["2026-10-21", 500000], ["2026-10-22", 1100000]]);
     expect(s.totals.CONCRETE).toMatchObject({ qty: 15, amountPaise: 1500000 });
     expect(s.amountPaise).toBe(1600000);
+  });
+});
+
+describe("naap ka text (DPR, PDF, app)", () => {
+  it("concrete / shuttering / steel", () => {
+    expect(workMeasureText({ type: "CONCRETE", l: 10, w: 5, h: 2.41, nos: 1 })).toBe("10 × 5 × 2.41");
+    expect(workMeasureText({ type: "SHUTTERING", l: 12, w: 3, nos: 2 })).toBe("12 × 3 × 2 nos");
+    expect(workMeasureText({ type: "STEEL", diaMm: 16, lengthM: 12, nos: 10 })).toBe("16 mm × 12 m × 10 nos");
   });
 });

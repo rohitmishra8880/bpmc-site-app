@@ -27,7 +27,14 @@ function makeDrive() {
       name, path, kids,
       getFoldersByName: (n) => { const k = kids.get(n); const a = k ? [k] : []; return { hasNext: () => a.length > 0, next: () => a.shift() }; },
       createFolder: (n) => { const c = mk(n, path + "/" + n); kids.set(n, c); return c; },
-      createFile: (blob) => { const id = "file_" + (files.size + 1); const file = { id, name: blob.name, path: path + "/" + blob.name, blob, getId: () => id, getName: () => blob.name, getBlob: () => blob }; files.set(id, file); return file; },
+      getFilesByName: (n) => { const a = [...files.values()].filter((x) => x.path === path + "/" + n); return { hasNext: () => a.length > 0, next: () => a.shift() }; },
+      createFile: (a, b, c) => {
+        const blob = typeof a === "string" ? { name: a, content: b, mime: c, getDataAsString: () => b, getBytes: () => [...Buffer.from(b)], getContentType: () => c } : a;
+        const id = "file_" + (files.size + 1);
+        const file = { id, name: blob.name, path: path + "/" + blob.name, blob, getId: () => id, getName: () => blob.name, getBlob: () => blob, getUrl: () => "https://drive/" + id };
+        files.set(id, file);
+        return file;
+      },
     };
     return f;
   };
@@ -55,7 +62,11 @@ const sandbox = {
     getUuid: () => Math.random().toString(36).slice(2),
     base64Decode: (b64) => [...Buffer.from(b64, "base64")],
     base64Encode: (bytes) => Buffer.from(bytes).toString("base64"),
-    newBlob: (bytes, mime, name) => ({ bytes, mime, name, getBytes: () => bytes, getContentType: () => mime, getName: () => name }),
+    newBlob: (bytes, mime, name) => {
+      const blob = { bytes, mime, name, getBytes: () => bytes, getContentType: () => mime, getName: () => name };
+      blob.getAs = (m) => Object.assign({}, blob, { mime: m, getContentType: () => m, setName(n) { this.name = n; return this; } });
+      return blob;
+    },
   },
   ContentService: { MimeType: { JSON: "json" }, createTextOutput: (t) => ({ text: t, setMimeType() { return this; } }) },
   MimeType: { PLAIN_TEXT: "text/plain" },
@@ -173,10 +184,16 @@ put("projects/KDG/labourPassbook/P3", KP({ businessDate: today, labourId: "LV", 
 put("projects/KDG/labourPassbook/P4", KP({ businessDate: today, labourId: "LC", kind: "ADVANCE", amountPaise: 100000, mode: "CASH" }));
 put("projects/KDG/labourPassbook/P5", KP({ businessDate: today, labourId: "LR", kind: "ADVANCE", amountPaise: 900000, mode: "CASH", deleted: { by: "x", reason: "galti" } }));
 
+// DPR: aaj aur kal Keshkal lock; Dantewada 30 din purana khaali din lock
+put("projects/KSK/dprActions/D1", P({ businessDate: today, action: "LOCK" }));
+put("projects/KSK/dprActions/D2", P({ businessDate: yday, action: "LOCK" }));
+const eDate = B.addDays(today, -30);
+put("projects/DNT/dprActions/E1", { ...P({ businessDate: eDate, action: "LOCK" }), projectId: "DNT" });
+
 // Photos: users / roles
 put("roles/site", { permissions: ["entry.create", "entry.edit"] });
 put("users/admin@bpmc", { active: true, role: "admin", projectIds: [] });
-put("users/munshi@bpmc", { active: true, role: "site", projectIds: ["KSK"] });
+put("users/munshi@bpmc", { name: "Munshi Ji", active: true, role: "site", projectIds: ["KSK"] });
 put("users/other@bpmc", { active: true, role: "site", projectIds: ["DNT"] });
 put("users/old@bpmc", { active: false, role: "site", projectIds: ["KSK"] });
 put("projects/KSK/photos/PH9", P({ businessDate: today, refCol: "workEntries", refId: "K1", driveFileId: "file_x", mime: "image/jpeg", label: "Footing" }));
@@ -253,6 +270,22 @@ expect("Transfer: Dantewada mein 5 GI pipe TRANSFER_IN (Keshkal se, naam ke saat
 expect("Transfer: Dantewada ka stock 5", get("projects/DNT/storeSummary/current")?.data?.items?.pipe?.inStore, 5);
 expect("Store entries DONE", ["storeMoves/S1", "storeMoves/S9", "storeService/V1"].map((p) => get(`projects/KSK/${p}`).data.serverStatus), ["DONE", "DONE", "DONE"]);
 
+// ---- DPR ----
+const dprOf = (pid, d) => get(`projects/${pid}/dpr/${d}`)?.data;
+const dp = dprOf("KSK", today);
+expect("DPR: lock → v1, approve karne wale ka asli naam", [dp?.status, dp?.version, dp?.lockedBy], ["LOCKED", 1, "Munshi Ji"]);
+expect("DPR: asli numbers — labour 23, diesel 646, Poclain 7h 48m, store ki entries", [dp?.snapshot?.labour?.totals?.total, dp?.snapshot?.diesel?.closing, dp?.snapshot?.machines?.find((m) => m.name === "Poclain 210")?.hoursText, dp?.snapshot?.store?.length > 0, dp?.snapshot?.empty], [23, 646, "7h 48m", true, false]);
+const v1 = get(`projects/KSK/dpr/${today}/versions/v1`)?.data;
+expect("DPR: version v1 alag save, fingerprint ke saath", [v1?.version, v1?.by, !!v1?.fp, v1?.snapshot?.diesel?.closing], [1, "Munshi Ji", true, 646]);
+const monthDir = B.dprFolder("EMRS KESHKAL", today);
+const fileAt = (n) => [...S.DriveApp._files.values()].find((x) => x.path === "/AI obsidian/_BPMC TEST/" + monthDir + "/" + n);
+expect("DPR: Obsidian mein md + json + pdf (test folder mein)", [!!fileAt(today + " DPR.md"), !!fileAt(today + " DPR.json"), !!fileAt(today + " DPR.pdf")], [true, true, true]);
+expect("DPR: md mein English / हिंदी aur asli number; json poora data", [fileAt(today + " DPR.md")?.blob.getDataAsString().includes("Opening / पुराना"), JSON.parse(fileAt(today + " DPR.json")?.blob.getDataAsString() ?? "{}").snapshot?.diesel?.closing], [true, 646]);
+expect("DPR: bina lock wala din Draft, version nahi (Kondagaon)", [dprOf("KDG", today)?.status, dprOf("KDG", today)?.version, get(`projects/KDG/dpr/${today}/versions/v1`)], ["DRAFT", 0, null]);
+const ef = [...S.DriveApp._files.values()].find((x) => x.path.endsWith(eDate + " DPR.md"));
+expect("DPR: khaali din ki file khaali nahi — saaf likha", [dprOf("DNT", eDate)?.snapshot?.empty, ef?.blob.getDataAsString().includes("Is din koi entry nahi")], [true, true]);
+expect("DPR action DONE", get("projects/KSK/dprActions/D1").data.serverStatus, "DONE");
+
 // ---- baad mein badlav: transfer hataya, Rod cutter qty 2 → 1, toote ki katauti hatayi ----
 put("projects/KSK/storeMoves/S9", P({ rev: 2, businessDate: today, type: "TRANSFER_OUT", itemId: "pipe", qty: 5, otherProjectId: "DNT", deleted: { by: "munshi@bpmc", reason: "galat site" } }));
 put("projects/KSK/storeMoves/S1", P({ rev: 2, businessDate: dAgo(10), type: "INWARD", itemId: "rcm", qty: 1, ratePaise: 1500000, gstPct: 18, payMode: "UDHAAR", partyId: "sharma" }));
@@ -263,6 +296,10 @@ expect("Edit: Keshkal GI pipe wapas 22 (alert hata)", [get("projects/KSK/storeSu
 expect("Edit: Rod cutter 1 → RCM-02 CANCELLED, RCM-01 bana raha", S.listDocs_("projects/KSK/storeAssets").map((d) => [d.id, d.data.status]), [["RCM-01", "ACTIVE"], ["RCM-02", "CANCELLED"]]);
 expect("Edit: udhaar bill ₹17,700 (1 × ₹15,000 + 18%), rev 2", [get("projects/KSK/ledger/st_S1")?.data?.amountPaise, get("projects/KSK/ledger/st_S1")?.data?.rev], [1770000, 2]);
 expect("Edit: katauti 0 ki → khate se hati", !!get("projects/KSK/ledger/sr_S6")?.data?.deleted, true);
+expect("DPR edit: locked din badla → v2; v1 purana safe (transfer usme hai, v2 mein nahi)", [dprOf("KSK", today)?.version, get(`projects/KSK/dpr/${today}/versions/v1`)?.data?.snapshot?.store?.some((r) => r.type === "TRANSFER_OUT"), get(`projects/KSK/dpr/${today}/versions/v2`)?.data?.snapshot?.store?.some((r) => r.type === "TRANSFER_OUT")], [2, true, false]);
+expect("DPR edit: naya version ki file v2 naam se, purani nahi badli", !!fileAt(today + " DPR v2.md"), true);
+S.runHisab();
+expect("DPR: kuch nahi badla → version nahi badhta", dprOf("KSK", today)?.version, 2);
 
 const ls = get("projects/KSK/ledgerSummary/current")?.data;
 const hp = ls?.parties?.hpcl;
@@ -355,6 +392,14 @@ expect("Photo: member apni site ki photo dekh sake (base64)", [gt.ok, gt.data, g
 expect("Photo: entry mein na likhi hui Drive file nahi dikhti; dusre project ka user nahi", [getP({ token: "good", fileId: "file_1" }).ok === true && !S.DriveApp._files.has("file_1"), getP({ token: "out", fileId: good.fileId }).ok], [false, false]);
 S.runHisab();
 expect("Photo entries DONE (server ne dekh liya)", ["PH9", "PH1"].map((k) => get(`projects/KSK/photos/${k}`).data.serverStatus), ["DONE", "DONE"]);
+
+// DPR: purane din ka diesel badla → aage ke locked din bhi naya version (CLAUDE.md Point 1)
+{
+  const vBefore = dprOf("KSK", today)?.version;
+  put("projects/KSK/stockMoves/d1", P({ rev: 2, businessDate: yday, itemId: "diesel", type: "IN", qty: 250, payMode: "NAKAD" }));
+  S.runHisab();
+  expect("DPR cascade: kal ka diesel 246 → 250, aaj ki DPR ka opening 250 + naya version", [dprOf("KSK", today)?.snapshot?.diesel?.opening, dprOf("KSK", today)?.version], [250, vBefore + 1]);
+}
 
 console.log(fails ? `\n${fails} jaanch FAIL` : "\nSab server jaanch pass");
 process.exit(fails ? 1 : 0);

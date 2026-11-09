@@ -158,7 +158,7 @@ service cloud.firestore {
         function isEntryCol() {
           return col in ['stockMoves', 'machineLogs', 'machineDeductions', 'labourMuster', 'staffAttendance',
                          'staffPassbook', 'workEntries', 'storeMoves', 'ledger', 'photos',
-                         'labourAttendance', 'labourPassbook', 'storeService'];
+                         'labourAttendance', 'labourPassbook', 'storeService', 'dprActions'];
         }
         function nd() {
           return request.resource.data;

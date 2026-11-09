@@ -345,6 +345,17 @@ describe("store / saman register", () => {
   });
 });
 
+describe("DPR", () => {
+  it("site user DPR lock ki request audit ke saath bhej sake; dpr khud nahi likh sakta", async () => {
+    const db = dbAs(SITE);
+    const b = writeBatch(db);
+    b.set(doc(db, `projects/${PID}/dprActions/DA1`), { projectId: PID, createdBy: SITE, createdAt: serverTimestamp(), deleted: null, rev: 1, serverStatus: "PENDING", lastAuditId: "dp1", businessDate: TODAY, action: "LOCK" });
+    b.set(doc(db, `projects/${PID}/auditLog/dp1`), { entity: "dprActions/DA1", action: "CREATE", rev: 1, by: SITE, at: serverTimestamp(), reason: null });
+    await assertSucceeds(b.commit());
+    await assertFails(setDoc(doc(db, `projects/${PID}/dpr/${TODAY}`), { status: "LOCKED" }));
+  });
+});
+
 describe("daily work", () => {
   it("site user kaam ki entry (naap + rate) audit ke saath bana sake; D−3 par nahi", async () => {
     const db = dbAs(SITE);

@@ -6,6 +6,7 @@ import { ToastProvider } from "./lib/ui";
 import { Attendance } from "./pages/Attendance";
 import { Creditors } from "./pages/Creditors";
 import { Dashboard } from "./pages/Dashboard";
+import { Dpr } from "./pages/Dpr";
 import { EditHistory } from "./pages/EditHistory";
 import { Inventory } from "./pages/Inventory";
 import { Machinery } from "./pages/Machinery";
@@ -40,6 +41,7 @@ function Gate() {
           <Route path="work" element={<Work />} />
           <Route path="creditors" element={<Creditors />} />
           <Route path="reports" element={<Reports />} />
+          <Route path="dpr" element={<Dpr />} />
           <Route path="ai" element={<Soon title="AI Insights" phase="Phase 4" what="Questions answered from real site data" />} />
           <Route path="help" element={<Soon title="Help Center" phase="Phase 4" what="Calculators, SOPs, emergency contacts" />} />
           <Route path="bin" element={<RecycleBin />} />

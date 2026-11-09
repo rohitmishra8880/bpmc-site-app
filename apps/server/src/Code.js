@@ -131,6 +131,7 @@ function runHisab() {
     var ctx = { today: today, started: started, materialIds: materialIds, machines: null, rental: null, storeItems: null };
     var storeDirty = {};
     var ledgerDirty = {};
+    var dprDirty = {};
 
     listDocs_('projects').forEach(function (p) {
       var parent = 'projects/' + p.id;
@@ -149,6 +150,7 @@ function runHisab() {
       if (pStore.length || pServ.length || (sum && sum.data.asOf !== today)) storeDirty[p.id] = 1;
       var pLedger = query_(parent, 'ledger', 'serverStatus', ENTRY_STATUS_PENDING);
       var pWork = query_(parent, 'workEntries', 'serverStatus', ENTRY_STATUS_PENDING);
+      var pDpr = query_(parent, 'dprActions', 'serverStatus', ENTRY_STATUS_PENDING);
       var pPhotos = query_(parent, 'photos', 'serverStatus', ENTRY_STATUS_PENDING);
       // Bakaya udhaar (stock / store) aur katauti se bhi badalta hai; overdue ke din roz badalte hain
       var lsum = getDoc_(parent + '/ledgerSummary/current');
@@ -159,8 +161,17 @@ function runHisab() {
       }
       if (pLabPass.length || !lsum || lsum.data.asOf !== today) syncContractorLabour_(parent, p.id, ctx);
       if (pLedger.length || pStock.length || pStore.length || pWork.length || pLabPass.length || !lsum || lsum.data.asOf !== today) ledgerDirty[p.id] = 1;
-      var all = pStock.concat(pLogs, pDeds, pMuster, pStaff, pPass, pLabAtt, pLabPass, pStore, pServ, pLedger, pWork, pPhotos);
+      var all = pStock.concat(pLogs, pDeds, pMuster, pStaff, pPass, pLabAtt, pLabPass, pStore, pServ, pLedger, pWork, pPhotos, pDpr);
       if (!all.length) return;
+      var dd = markDprDate_(dprDirty, p.id, null);
+      dd.actions = dd.actions.concat(pDpr);
+      dd.pending = dd.pending.concat(all);
+      all.forEach(function (d) { markDprDate_(dprDirty, p.id, d.data.businessDate); });
+      if (pStock.length) {
+        // Purane din ka stock badla → aage ke saare din ki DPR (opening badalta hai)
+        var minD = pStock.reduce(function (m, d) { return d.data.businessDate && d.data.businessDate < m ? d.data.businessDate : m; }, today);
+        listDocs_(parent + '/dpr').forEach(function (x) { if (x.id >= minD) markDprDate_(dprDirty, p.id, x.id); });
+      }
       var out = {};
       if (pWork.length) {
         out.work = hisabWork_(parent, p.id, pWork);
@@ -169,7 +180,7 @@ function runHisab() {
       if (pStore.length) {
         out.storeUdhaar = hisabUdhaar_(parent, p.id, pStore, { inType: 'INWARD', prefix: 'st_', col: 'storeMoves' });
         out.storeRecovery = hisabStoreRecovery_(parent, p.id, pStore);
-        out.storeTransfers = hisabStoreTransfers_(p.id, pStore, storeDirty);
+        out.storeTransfers = hisabStoreTransfers_(p.id, pStore, storeDirty, dprDirty);
       }
       if (pStock.length) {
         out.stock = hisabStock_(parent, pStock, ctx);
@@ -191,6 +202,10 @@ function runHisab() {
     });
     Object.keys(ledgerDirty).forEach(function (pid) {
       (log.projects[pid] = log.projects[pid] || {}).ledger = hisabLedgerSummary_('projects/' + pid, ctx);
+    });
+    // DPR sabse aakhir mein — upar ke saare hisab ke baad
+    Object.keys(dprDirty).forEach(function (pid) {
+      (log.projects[pid] = log.projects[pid] || {}).dpr = hisabDpr_('projects/' + pid, pid, dprDirty[pid], ctx);
     });
   } catch (e) {
     log.error = String(e && e.message || e);
@@ -307,11 +322,7 @@ function hisabUdhaar_(parent, pid, pending, o) {
  * Credit period masters_parties.creditDays se; thekedar ka 0.
  */
 function hisabLedgerSummary_(parent, ctx) {
-  if (!ctx.parties) {
-    ctx.parties = {};
-    listDocs_('masters_parties').forEach(function (d) { ctx.parties[d.id] = { name: d.data.name, kind: 'PARTY', creditDays: d.data.creditDays != null ? Number(d.data.creditDays) : null }; });
-    listDocs_('masters_contractors').forEach(function (d) { if (!ctx.parties[d.id]) ctx.parties[d.id] = { name: d.data.name, kind: 'CONTRACTOR', creditDays: 0 }; });
-  }
+  loadParties_(ctx);
   var byParty = {};
   query_(parent, 'ledger').forEach(function (d) {
     var x = d.data;
@@ -571,6 +582,169 @@ function syncContractorLabour_(parent, pid, ctx) {
   return writes.length;
 }
 
+/** dprDirty[pid].dates[date] = 1 — is din ki DPR dobara banani hai */
+function markDprDate_(dprDirty, pid, date) {
+  var x = dprDirty[pid] = dprDirty[pid] || { dates: {}, actions: [], pending: [] };
+  if (date) x.dates[date] = 1;
+  return x;
+}
+
+function loadParties_(ctx) {
+  if (ctx.parties) return;
+  ctx.parties = {};
+  listDocs_('masters_parties').forEach(function (d) { ctx.parties[d.id] = { name: d.data.name, kind: 'PARTY', creditDays: d.data.creditDays != null ? Number(d.data.creditDays) : null }; });
+  listDocs_('masters_contractors').forEach(function (d) { if (!ctx.parties[d.id]) ctx.parties[d.id] = { name: d.data.name, kind: 'CONTRACTOR', creditDays: 0 }; });
+}
+
+/**
+ * DPR: badle hue dino ki report dobara. Lock nahi → Draft (dpr/{date}). Lock → version (dpr/{date}/versions/v1…) + Obsidian md / json / pdf.
+ * Locked din ka data badla → naya version; purana version aur purani file kabhi nahi badalti.
+ */
+function hisabDpr_(parent, pid, dd, ctx) {
+  loadParties_(ctx);
+  if (!ctx.machines) {
+    ctx.machines = {};
+    listDocs_('masters_machines').forEach(function (m) { ctx.machines[m.id] = m.data; });
+  }
+  if (!ctx.materials) {
+    ctx.materials = {};
+    listDocs_('masters_materials').forEach(function (m) { ctx.materials[m.id] = m.data; });
+  }
+  var proj = getDoc_('projects/' + pid);
+  var ledger = query_(parent, 'ledger');
+  var out = { dates: 0, versions: 0, errors: [] };
+  Object.keys(dd.dates).sort().forEach(function (date) {
+    try {
+      if (dprOneDate_(parent, pid, proj.data, date, dd, ledger, ctx)) out.versions++;
+      out.dates++;
+    } catch (e) {
+      out.errors.push(date + ': ' + String(e && e.message || e));
+    }
+  });
+  return out;
+}
+
+function dprUserName_(email, ctx) {
+  ctx.userNames = ctx.userNames || {};
+  if (!(email in ctx.userNames)) {
+    var u = email ? getDoc_('users/' + email) : null;
+    ctx.userNames[email] = (u && u.data.name) || email || 'Server';
+  }
+  return ctx.userNames[email];
+}
+
+/** Us din tak ka bakaya (baad ki payment purani DPR nahi badalti) */
+function dprCreditors_(ledger, date, ctx) {
+  var byParty = {};
+  ledger.forEach(function (d) {
+    var x = d.data;
+    if (!x.partyId || !x.type || !x.businessDate || x.businessDate > date) return;
+    (byParty[x.partyId] = byParty[x.partyId] || []).push({ id: d.id, businessDate: x.businessDate, type: x.type, amountPaise: Number(x.amountPaise) || 0, deleted: !!x.deleted });
+  });
+  var t = { bakayaPaise: 0, overduePaise: 0, toRecoverPaise: 0 };
+  var any = false;
+  Object.keys(byParty).forEach(function (p) {
+    var st = BPMCCore.partyStatus(byParty[p], date, (ctx.parties[p] || {}).creditDays);
+    if (!st.entries) return;
+    any = true;
+    if (st.bakayaPaise > 0) t.bakayaPaise += st.bakayaPaise; else t.toRecoverPaise -= st.bakayaPaise;
+    t.overduePaise += st.overduePaise;
+  });
+  return any ? t : null;
+}
+
+function dprOneDate_(parent, pid, proj, date, dd, ledger, ctx) {
+  var byId = function (a, b) { return a.id < b.id ? -1 : a.id > b.id ? 1 : 0; };
+  var logs = latestPerMachine_(rangeQuery_(parent, 'machineLogs', 'businessDate', date, date));
+  var snapshot = BPMCCore.buildDpr({
+    date: date,
+    projectName: proj.name || pid,
+    day: (getDoc_(parent + '/days/' + date) || { data: {} }).data,
+    materials: ctx.materials,
+    machines: ctx.machines,
+    contractors: ctx.parties,
+    machineLogs: Object.keys(logs).map(function (k) { return logs[k].data; }),
+    workEntries: rangeQuery_(parent, 'workEntries', 'businessDate', date, date).sort(byId).map(function (d) {
+      var x = d.data;
+      return { type: x.type, contractorId: x.contractorId, zone: x.zone || null, workLabel: x.workLabel || null, qty: Number(x.qty) || 0, unit: x.unit, measure: x.l != null || x.diaMm != null ? BPMCCore.workMeasureText(x) : null, deleted: !!x.deleted };
+    }),
+    storeMoves: rangeQuery_(parent, 'storeMoves', 'businessDate', date, date).sort(byId).map(function (d) {
+      var x = d.data;
+      return { type: x.type, itemName: x.itemName || x.itemId, qty: Number(x.qty) || 0, unit: x.unit || null, contractorId: x.contractorId || null, condition: x.condition || null, partyName: x.partyName || null, otherProjectName: x.otherProjectName || x.otherProjectId || null, purpose: x.purpose || null, deleted: !!x.deleted };
+    }),
+    creditors: dprCreditors_(ledger, date, ctx),
+    photos: rangeQuery_(parent, 'photos', 'businessDate', date, date).sort(byId).map(function (d) {
+      var x = d.data;
+      return { label: x.label || null, takenAt: x.takenAt, lat: x.lat, lng: x.lng, accuracyM: x.accuracyM, driveFileId: x.driveFileId, deleted: !!x.deleted };
+    }),
+  });
+  var fp = BPMCCore.dprFingerprint(snapshot);
+  var path = parent + '/dpr/' + date;
+  var cur = getDoc_(path);
+  var locked = !!cur && cur.data.status === 'LOCKED';
+  var lockAct = dd.actions.filter(function (a) { return a.data.businessDate === date && a.data.action === 'LOCK' && !a.data.deleted; }).pop();
+  var now = new Date();
+  if (!locked && !lockAct) {
+    commit_([{ update: { name: fullName_(path), fields: encFields_({ date: date, status: 'DRAFT', version: 0, snapshot: snapshot, fp: fp, updatedAt: now }) } }]);
+    return false;
+  }
+  if (locked && cur.data.fp === fp) return false;
+  var version = ((cur && cur.data.version) || 0) + 1;
+  var by = lockAct && !locked ? dprUserName_(lockAct.data.createdBy, ctx) : 'Auto — entries changed';
+  var lockedBy = locked ? cur.data.lockedBy : by;
+  var lockedAt = locked ? cur.data.lockedAt : Utilities.formatDate(now, 'Asia/Kolkata', 'dd MMM yyyy HH:mm');
+  var note = !locked ? 'Locked' : dprChangeNote_(parent, date, dd);
+  var meta = { version: version, lockedBy: lockedBy, lockedAt: lockedAt, note: version > 1 ? note : null };
+  var files;
+  try {
+    files = writeDprFiles_(proj, pid, date, snapshot, meta, ctx);
+  } catch (e) {
+    files = { error: String(e && e.message || e) };
+  }
+  commit_([
+    { update: { name: fullName_(path + '/versions/v' + version), fields: encFields_({ version: version, snapshot: snapshot, fp: fp, by: by, at: now, note: note, lockedBy: lockedBy, lockedAt: lockedAt, files: files }) } },
+    { update: { name: fullName_(path), fields: encFields_({ date: date, status: 'LOCKED', version: version, snapshot: snapshot, fp: fp, lockedBy: lockedBy, lockedAt: lockedAt, note: note, updatedAt: now }) } },
+  ]);
+  return true;
+}
+
+/** Naye version ka kaaran: us din ki badli entries ke audit se */
+function dprChangeNote_(parent, date, dd) {
+  var reasons = {};
+  dd.pending.forEach(function (d) {
+    if (d.data.businessDate !== date || !d.data.lastAuditId) return;
+    var a = getDoc_(parent + '/auditLog/' + d.data.lastAuditId);
+    if (a && a.data.reason) reasons[a.data.reason] = 1;
+  });
+  var list = Object.keys(reasons).slice(0, 3);
+  return list.length ? list.join('; ') : 'Entries changed';
+}
+
+function dprLogo_(ctx) {
+  if (ctx.dprLogo !== undefined) return ctx.dprLogo;
+  ctx.dprLogo = null;
+  if (fsProject_().indexOf('demo-') === 0) return null;
+  try {
+    var r = UrlFetchApp.fetch('https://' + fsProject_() + '.web.app/bpmc-logo-192.png', { muteHttpExceptions: true });
+    if (r.getResponseCode() === 200) ctx.dprLogo = 'data:image/png;base64,' + Utilities.base64Encode(r.getBlob().getBytes());
+  } catch (e) {
+    ctx.dprLogo = null;
+  }
+  return ctx.dprLogo;
+}
+
+/** Vault\Daily Report\saal\mahina mein md + json + pdf. Same naam ho to " v2" — purani file kabhi nahi chhedte. */
+function writeDprFiles_(proj, pid, date, snapshot, meta, ctx) {
+  var vault = proj.vault || proj.name || pid;
+  var folder = folderPath_(obsidianRoot_(), BPMCCore.dprFolder(vault, date));
+  var base = date + ' DPR';
+  var md = createNewFile_(folder, base, '.md', BPMCCore.dprMarkdown(snapshot, meta), MimeType.PLAIN_TEXT);
+  var json = createNewFile_(folder, base, '.json', JSON.stringify({ type: 'bpmc-dpr', date: date, version: meta.version, lockedBy: meta.lockedBy, lockedAt: meta.lockedAt, note: meta.note, snapshot: snapshot }, null, 1), MimeType.PLAIN_TEXT);
+  var pdfName = uniqueName_(folder, base, '.pdf');
+  var pdf = folder.createFile(Utilities.newBlob(BPMCCore.dprHtml(snapshot, meta, dprLogo_(ctx)), 'text/html', base + '.html').getAs('application/pdf').setName(pdfName));
+  return { md: md.getId(), json: json.getId(), pdf: pdf.getId(), name: pdfName };
+}
+
 /** Server ka soft-delete (reason ke saath) */
 function serverSoftDelete_(path, existing, reason) {
   var now = new Date();
@@ -614,7 +788,7 @@ function hisabStoreRecovery_(parent, pid, pending) {
  * Doosri site bheja (TRANSFER_OUT) → us site mein TRANSFER_IN (projects/<to>/storeMoves/tr_<from>_<id>).
  * Entry hati / site badli → purana TRANSFER_IN bhi hata. Jis site mein likha, uska store summary dobara.
  */
-function hisabStoreTransfers_(pid, pending, storeDirty) {
+function hisabStoreTransfers_(pid, pending, storeDirty, dprDirty) {
   var names = {};
   listDocs_('projects').forEach(function (p) { names[p.id] = p.data.name || p.id; });
   var projectIds = Object.keys(names);
@@ -632,6 +806,7 @@ function hisabStoreTransfers_(pid, pending, storeDirty) {
         if (existing && !existing.data.deleted) {
           writes.push(serverSoftDelete_(path, existing, m.deleted ? 'Transfer entry was deleted at the sending site' : 'Transfer changed at the sending site'));
           storeDirty[q] = 1;
+          markDprDate_(dprDirty, q, existing.data.businessDate);
         }
         return;
       }
@@ -647,6 +822,7 @@ function hisabStoreTransfers_(pid, pending, storeDirty) {
         },
       });
       storeDirty[q] = 1;
+      markDprDate_(dprDirty, q, m.businessDate);
     });
   });
   if (writes.length) commit_(writes);
@@ -1046,7 +1222,7 @@ function installTriggers() {
 var OBSIDIAN_ROOT = 'AI obsidian';
 var PROJECT_COLLECTIONS = ['stockMoves', 'machineLogs', 'machineDeductions', 'labourMuster', 'staffAttendance', 'staffPassbook',
   'workEntries', 'storeMoves', 'ledger', 'photos', 'auditLog', 'unlocks', 'days', 'machineBills',
-  'labour', 'labourAttendance', 'labourPassbook', 'labourBalances', 'labourWeeks', 'staffBalances', 'storeService', 'storeSummary', 'storeAssets'];
+  'labour', 'labourAttendance', 'labourPassbook', 'labourBalances', 'labourWeeks', 'staffBalances', 'storeService', 'storeSummary', 'storeAssets', 'ledgerSummary', 'dpr', 'dprActions'];
 var GLOBAL_COLLECTIONS = ['users', 'roles', 'settings', 'projects', 'masters_materials', 'masters_machines', 'masters_contractors',
   'masters_parties', 'masters_storeItems', 'masters_staff', 'masters_companyAccounts', 'auditLog'];
 
@@ -1065,9 +1241,13 @@ function folderPath_(parent, path) {
   }, parent);
 }
 /** Naya file — same naam pehle se ho to " v2", " v3"… (purani ko kabhi overwrite nahi) */
-function createNewFile_(folder, baseName, ext, content, mime) {
+function uniqueName_(folder, baseName, ext) {
   var name = baseName + ext;
   for (var v = 2; folder.getFilesByName(name).hasNext(); v++) name = baseName + ' v' + v + ext;
+  return name;
+}
+function createNewFile_(folder, baseName, ext, content, mime) {
+  var name = uniqueName_(folder, baseName, ext);
   var file = folder.createFile(name, content, mime);
   // Likhne ke baad padh ke jaancho — khaali / toota file nahi chahiye
   var back = file.getBlob().getDataAsString();
@@ -1098,7 +1278,12 @@ function dailyBackup(reason) {
     var entries = 0;
     PROJECT_COLLECTIONS.forEach(function (c) {
       cols[c] = query_(parent, c).map(plain_);
-      if (c !== 'days' && c !== 'auditLog') entries += cols[c].length;
+      if (c !== 'days' && c !== 'auditLog' && c !== 'dpr') entries += cols[c].length;
+    });
+    // DPR ke saare version bhi backup mein
+    cols.dprVersions = [];
+    cols.dpr.forEach(function (d) {
+      query_(parent + '/dpr/' + d.id, 'versions').map(plain_).forEach(function (v) { cols.dprVersions.push({ date: d.id, version: v }); });
     });
     var payload = {
       type: 'bpmc-full-backup',
@@ -1194,7 +1379,7 @@ function bootstrapPhase1() {
 // auditLog aur days/ ko chhuta nahi (days server dobara banata hai).
 
 var RESTORE_COLLECTIONS = ['stockMoves', 'machineLogs', 'machineDeductions', 'labourMuster', 'staffAttendance', 'staffPassbook',
-  'workEntries', 'storeMoves', 'ledger', 'photos', 'labourAttendance', 'labourPassbook'];
+  'workEntries', 'storeMoves', 'ledger', 'photos', 'labourAttendance', 'labourPassbook', 'storeService', 'dprActions'];
 
 function restoreInput_() {
   var props = PropertiesService.getScriptProperties();

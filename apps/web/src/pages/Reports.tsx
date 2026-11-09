@@ -2,7 +2,7 @@
 // Har report pehle screen par dikhti hai (preview), phir "Download PDF".
 import { collection, doc, getDocs, onSnapshot, query, where, type DocumentData } from "firebase/firestore";
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   addDays, contractorStatement, dateRange, daysInMonth, workAmount, workStatement, WORK_UNIT, type WorkEntryLite, type WorkType,
   formatDate, formatINR, formatQtyShort, labourEarning, latestMarks, runningLedger, toBusinessDateIST, weekStart,
@@ -25,7 +25,7 @@ const REPORTS: { k: Kind; ic: string; label: string; sub: string; soon?: string;
   { k: "ledger", ic: "📒", label: "Party / contractor ledger", sub: "Bills, payments, debit notes, recovery — running balance", landscape: false },
   { k: "contractor", ic: "🧾", label: "Contractor khata", sub: "Date range — work bill, advance, labour paid, recovery, balance", landscape: false },
   { k: "work", ic: "📅", label: "Contractor work (day-wise)", sub: "Date range — measurement, rate and bill, contractor by contractor", landscape: false },
-  { k: "dpr", ic: "📄", label: "Daily Progress Report (DPR)", sub: "English / हिंदी, signatures", soon: "Phase 3", landscape: false },
+  { k: "dpr", ic: "📄", label: "Daily Progress Report (DPR)", sub: "English / हिंदी, lock, versions, WhatsApp", landscape: true },
 ];
 
 const MARK_SHORT: Record<string, string> = { P: "P", HD: "½", A: "A" };
@@ -76,6 +76,7 @@ function useShiftHours() {
 export function Reports() {
   const { current } = useProjects();
   const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
   const kind = (params.get("r") as Kind | null) ?? null;
   const today = toBusinessDateIST(new Date());
   const [month, setMonth] = useState(today.slice(0, 7));
@@ -98,7 +99,7 @@ export function Reports() {
         <PageHead title="Reports & PDF" sub={`${current.name} — every hisab as a PDF to download, print or share`} />
         <div className="mods" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
           {REPORTS.map((x) => (
-            <button key={x.k} className="card mod" disabled={!!x.soon} onClick={() => setParams({ r: x.k })} style={x.soon ? { opacity: 0.55 } : undefined}>
+            <button key={x.k} className="card mod" disabled={!!x.soon} onClick={() => (x.k === "dpr" ? navigate("/dpr") : setParams({ r: x.k }))} style={x.soon ? { opacity: 0.55 } : undefined}>
               <span className="bubble">{x.ic}</span>
               <b>{x.label}</b>
               <span>{x.soon ?? x.sub}</span>

@@ -3,7 +3,7 @@ import { collection, getDocs, query, where } from "firebase/firestore";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  canEditDate, formatDate, formatINR, formatQtyShort, toBusinessDateIST, toPaise, workAmount, workQuantity,
+  canEditDate, formatDate, formatINR, formatQtyShort, toBusinessDateIST, toPaise, workAmount, workMeasureText, workQuantity,
   type WorkTotals, type WorkType,
 } from "@bpmc/core";
 import { DateBar } from "../components/DateBar";
@@ -166,13 +166,7 @@ export function Work() {
   );
 }
 
-/** "10 × 5 × 2.41" / "16 mm × 12 m × 10" — entry ka naap, jaisa daala gaya */
-export function measureText(r: Record<string, unknown>): string {
-  const n = Number(r.nos) > 1 ? ` × ${r.nos} nos` : "";
-  if (r.type === "STEEL") return `${r.diaMm} mm × ${r.lengthM} m${n}`;
-  if (r.type === "SHUTTERING") return `${r.l} × ${r.w}${n}`;
-  return `${r.l} × ${r.w} × ${r.h}${n}`;
-}
+export const measureText = workMeasureText;
 
 function WorkForm({ type, row, date, contractors, onClose }: { type: WorkType; row: Entry | null; date: string; contractors: { id: string; name: string }[]; onClose: () => void }) {
   const profile = useProfile();

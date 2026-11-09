@@ -114,3 +114,11 @@ export function workStatement(entries: WorkEntryLite[], contractorId: string): W
   }
   return { days, totals, amountPaise: sum };
 }
+
+/** Entry ka naap, jaisa daala gaya: "10 × 5 × 2.41", "16 mm × 12 m × 10 nos" */
+export function workMeasureText(r: Record<string, unknown>): string {
+  const n = Number(r.nos) > 1 ? ` × ${r.nos} nos` : "";
+  if (r.type === "STEEL") return `${r.diaMm} mm × ${r.lengthM} m${n}`;
+  if (r.type === "SHUTTERING") return `${r.l} × ${r.w}${n}`;
+  return `${r.l} × ${r.w} × ${r.h}${n}`;
+}
