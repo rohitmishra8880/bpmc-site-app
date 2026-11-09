@@ -80,11 +80,13 @@ const P = (o) => ({ projectId: "KSK", serverStatus: "PENDING", deleted: null, re
 
 put("settings/global", { rental: { shiftHours: 8, halfDayFactor: 0.5, idleDayFactor: 0, monthDivisor: 30 } });
 put("projects/KSK", { name: "EMRS Keshkal", vault: "EMRS KESHKAL" });
+// Poclain 200 ka aana: 20 tarikh (agar aaj 20 ya baad ki hai), nahi to aaj hi — taaki test kisi bhi din chale
+const ARRIVE = Math.min(20, Number(today.slice(8)));
 put("masters_materials/diesel", { name: "Diesel", baseUnit: "Ltr", deleted: null });
 put("masters_materials/cement", { name: "Cement", baseUnit: "Bags", deleted: null });
 put("masters_machines/poc210", { name: "Poclain 210", kind: "COMPANY", deleted: null });
 put("masters_machines/ajax2", { name: "AJAX II", kind: "RENTAL", rateType: "DAY", ratePaise: 800000, deleted: null });
-put("masters_machines/poc200", { name: "Poclain 200", kind: "RENTAL", rateType: "MONTH", ratePaise: 10000000, siteFrom: `${month}-20`, deleted: null });
+put("masters_machines/poc200", { name: "Poclain 200", kind: "RENTAL", rateType: "MONTH", ratePaise: 10000000, siteFrom: `${month}-${String(ARRIVE).padStart(2, "0")}`, deleted: null });
 
 put("projects/KSK/stockMoves/d1", P({ businessDate: yday, itemId: "diesel", type: "IN", qty: 246, payMode: "NAKAD" }));
 put("projects/KSK/stockMoves/d2", P({ businessDate: today, itemId: "diesel", itemName: "Diesel", type: "IN", qty: 600, payMode: "UDHAAR", partyId: "hpcl", partyName: "HPCL", ratePaise: 8950, gstPct: 0 }));
@@ -151,6 +153,14 @@ put("projects/KDG/workEntries/K3", KP({ businessDate: today, type: "STEEL", cont
 put("projects/KDG/workEntries/K4", KP({ businessDate: today, type: "CONCRETE", contractorId: "hemlal", qty: 5, unit: "M³", ratePaise: 650000, deleted: { by: "x", reason: "galti" } }));
 put("projects/KDG/workEntries/K5", KP({ businessDate: today, type: "EXCAVATION", contractorId: "hemlal", contractorName: "Hemlal", qty: 18, unit: "M³", ratePaise: 0 }));
 
+// Machine rental bill → malik ke khate (Kondagaon): JCB (malik Mahavir, ₹8,000/din) ek full din + ₹1,000 driver advance; doosri machine ka malik link nahi
+put("masters_parties/mahavir", { name: "Mahavir Excavators", creditDays: 15, deleted: null });
+put("masters_machines/jcb1", { name: "JCB 3DX", kind: "RENTAL", rateType: "DAY", ratePaise: 800000, ownerPartyId: "mahavir", deleted: null });
+put("masters_machines/jcb2", { name: "Tipper 9", kind: "RENTAL", rateType: "DAY", ratePaise: 500000, deleted: null });
+put("projects/KDG/machineLogs/J1", KP({ businessDate: today, machineId: "jcb1", status: "FULL", sr: 100, cr: 108, dieselLtr: 0 }));
+put("projects/KDG/machineLogs/J2", KP({ businessDate: today, machineId: "jcb2", status: "FULL", sr: 10, cr: 18, dieselLtr: 0 }));
+put("projects/KDG/machineDeductions/JD1", KP({ businessDate: today, machineId: "jcb1", kind: "DRIVER_ADVANCE", amountPaise: 100000 }));
+
 // Photos: users / roles
 put("roles/site", { permissions: ["entry.create", "entry.edit"] });
 put("users/admin@bpmc", { active: true, role: "admin", projectIds: [] });
@@ -179,8 +189,9 @@ expect("Poclain 210: 7h 48m, amount nahi (company)", [day.machines.poc210.hoursT
 expect("AJAX II half = ₹4,000", day.machines.ajax2.amountPaise, 400000);
 expect("Machine diesel kul 195 L (Inventory se mel)", day.machineTotals.dieselLtr, 195);
 const bill = get(`projects/KSK/machineBills/poc200_${month}`).data;
-expect("Poclain 200: 20 ko aayi, 1 din breakdown → 1,00,000 − 20 din = ₹33,333.33", bill.rentalPaise, 3333333);
-expect("Advance ₹20,000 minus → ₹13,333.33 dena", bill.netPaise, 1333333);
+const wantRent = Math.round((10000000 * (30 - ARRIVE)) / 30); // 30 − (ARRIVE−1 din site par nahi) − 1 din breakdown
+expect(`Poclain 200: ${ARRIVE} ko aayi, 1 din breakdown → ₹1,00,000 × (30 − ${ARRIVE}) ÷ 30 (20 ko aayi to ₹33,333.33)`, bill.rentalPaise, wantRent);
+expect("Advance ₹20,000 minus → baaki dena", bill.netPaise, wantRent - 2000000);
 const led = get("projects/KSK/ledger/sm_d2").data;
 expect("Udhaar diesel → HPCL khate mein ₹53,700 ka bill", [led.type, led.partyId, led.amountPaise], ["BILL", "hpcl", 5370000]);
 expect("Hataayi udhaar entry ka bill nahi bana", get("projects/KSK/ledger/sm_c1"), null);
@@ -268,6 +279,23 @@ put("projects/KDG/workEntries/K1", KP({ rev: 2, businessDate: today, type: "CONC
 put("projects/KDG/workEntries/K2", KP({ rev: 2, businessDate: today, type: "SHUTTERING", contractorId: "suraj", qty: 72, unit: "Sq M", ratePaise: 35000, deleted: { by: "x", reason: "galat" } }));
 S.runHisab();
 expect("Work edit: rate ₹7,000 → bill ₹8,43,500; hataayi shuttering ka bill hata", [get("projects/KDG/ledger/wk_K1")?.data?.amountPaise, !!get("projects/KDG/ledger/wk_K2")?.data?.deleted, get(`projects/KDG/days/${today}`)?.data?.work?.byContractor?.suraj?.amountPaise], [84350000, true, 84350000]);
+
+// ---- Machine bill → malik ka khata ----
+const mmonth = today.slice(0, 7);
+const mEnd = `${mmonth}-${String(B.daysInMonth(mmonth)).padStart(2, "0")}`;
+const mb = get(`projects/KDG/ledger/mb_jcb1_${mmonth}`)?.data;
+const md = get(`projects/KDG/ledger/md_jcb1_${mmonth}`)?.data;
+expect("Machine bill: JCB ka mahine ka rental ₹8,000 malik (Mahavir) ke khate mein BILL, mahine ke aakhri din", [mb?.type, mb?.partyId, mb?.partyKind, mb?.amountPaise, mb?.businessDate, mb?.source], ["BILL", "mahavir", "PARTY", 800000, mEnd, `machineBills/jcb1_${mmonth}`]);
+expect("Machine bill: driver advance ₹1,000 usi khate mein DEBIT_NOTE (kata hua)", [md?.type, md?.partyId, md?.amountPaise], ["DEBIT_NOTE", "mahavir", 100000]);
+expect("Machine bill: malik link nahi → khate mein kuch nahi", get(`projects/KDG/ledger/mb_jcb2_${mmonth}`), null);
+const mp = get("projects/KDG/ledgerSummary/current")?.data?.parties?.mahavir;
+expect("Machine bill: Mahavir ka bakaya ₹8,000 − ₹1,000 = ₹7,000, abhi overdue nahi (credit 15 din)", [mp?.name, mp?.billPaise, mp?.lessPaise, mp?.bakayaPaise, mp?.overduePaise], ["Mahavir Excavators", 800000, 100000, 700000, 0]);
+put("projects/KDG/machineDeductions/JD1", KP({ rev: 2, businessDate: today, machineId: "jcb1", kind: "DRIVER_ADVANCE", amountPaise: 300000 }));
+S.runHisab();
+expect("Machine bill edit: advance ₹3,000 → debit note ₹3,000, bakaya ₹5,000; ek hi entry (dobara nahi banti)", [get(`projects/KDG/ledger/md_jcb1_${mmonth}`)?.data?.amountPaise, get(`projects/KDG/ledger/md_jcb1_${mmonth}`)?.data?.rev, get("projects/KDG/ledgerSummary/current")?.data?.parties?.mahavir?.bakayaPaise], [300000, 2, 500000]);
+put("projects/KDG/machineLogs/J1", KP({ rev: 2, businessDate: today, machineId: "jcb1", status: "FULL", sr: 100, cr: 108, dieselLtr: 0, deleted: { by: "x", reason: "galat din" } }));
+S.runHisab();
+expect("Machine bill: log hata → rental ₹0, BILL khate se hata; advance baaki (malik se lena)", [!!get(`projects/KDG/ledger/mb_jcb1_${mmonth}`)?.data?.deleted, get("projects/KDG/ledgerSummary/current")?.data?.parties?.mahavir?.bakayaPaise], [true, -300000]);
 
 // ---- Photos: Drive upload (doPost) ----
 const TOKENS = { good: "munshi@bpmc", adm: "admin@bpmc", out: "other@bpmc", off: "old@bpmc" };

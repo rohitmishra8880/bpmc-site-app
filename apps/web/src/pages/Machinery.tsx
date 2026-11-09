@@ -534,6 +534,16 @@ function MonthlyBill({ pid, machines, month, selected, onSelect }: { pid: string
           <div style={{ borderTop: "2px solid var(--ink)", paddingTop: 8 }}>
             <Line l="Payable" r={formatINR(bill.netPaise)} b big />
           </div>
+          {m?.kind !== "COMPANY" &&
+            (m?.ownerPartyId ? (
+              <p className="small muted">
+                This bill is added to the owner's khata automatically (rental as a bill, advances as a deduction). <Link to="/creditors">Open Creditors →</Link>
+              </p>
+            ) : (
+              <p className="small" style={{ color: "var(--warn)" }}>
+                No owner party linked — set "Owner party (for khata)" for this machine in Masters to add the bill to the owner's khata.
+              </p>
+            ))}
           {bill.missingDates?.length > 0 && (
             <p className="small" style={{ color: "var(--warn)" }}>
               ⚠ No log entered for {bill.missingDates.length} days: {bill.missingDates.slice(0, 6).map((d: string) => formatDate(d)).join(", ")}

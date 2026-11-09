@@ -2,6 +2,7 @@ import { collection, onSnapshot, serverTimestamp, type DocumentData } from "fire
 import { useEffect, useMemo, useState } from "react";
 import { checkGstin, formatINR, isIfsc, normalizeBankAccount, normalizeMobile, toPaise } from "@bpmc/core";
 import { saveMaster } from "../lib/audit";
+import { useMaster } from "../lib/masters";
 import { can, useProfile } from "../lib/auth";
 import { db } from "../lib/firebase";
 import { Dialog, errorText, PageHead, ReasonDialog, useToast } from "../lib/ui";
@@ -14,6 +15,8 @@ interface Field {
   type: FieldType;
   required?: boolean;
   options?: [string, string][];
+  /** Dropdown ke option kisi master list se (jaise masters_parties) */
+  optionsFrom?: string;
   hint?: string;
   /** Table mein dikhana */
   show?: boolean;
@@ -44,6 +47,7 @@ const MASTERS: { col: string; label: string; one: string; fields: Field[]; admin
       { key: "name", label: "Machine name / no.", type: "text", required: true, show: true },
       { key: "kind", label: "Ownership", type: "select", required: true, show: true, options: [["COMPANY", "Company-owned"], ["RENTAL", "Rental"]] },
       { key: "ownerParty", label: "Owner / party", type: "text", show: true },
+      { key: "ownerPartyId", label: "Owner party (for khata)", type: "select", optionsFrom: "masters_parties", hint: "Monthly rental bill is added to this party's khata (Creditors). Add the owner under Parties first." },
       { key: "rateType", label: "Rate basis", type: "select", show: true, options: [["DAY", "Per day"], ["MONTH", "Per month"], ["HOUR", "Per hour"]] },
       { key: "ratePaise", label: "Rate (₹)", type: "money", show: true },
       { key: "rateFrom", label: "Rate effective from", type: "date" },
@@ -272,6 +276,7 @@ function MasterForm({ m, row, onClose }: { m: (typeof MASTERS)[number]; row: Row
   const profile = useProfile();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
+  const partyOptions = useMaster("masters_parties");
   const [vals, setVals] = useState<Record<string, string>>(() => {
     const v: Record<string, string> = {};
     for (const f of m.fields) {
@@ -345,7 +350,7 @@ function MasterForm({ m, row, onClose }: { m: (typeof MASTERS)[number]; row: Row
                 {f.type === "select" ? (
                   <select id={id} className="input" value={vals[f.key]} onChange={(ev) => setVals({ ...vals, [f.key]: ev.target.value })}>
                     {!f.required && <option value="">—</option>}
-                    {f.options!.map(([v, l]) => (
+                    {(f.optionsFrom ? partyOptions.map((p): [string, string] => [p.id, p.name]) : f.options!).map(([v, l]) => (
                       <option key={v} value={v}>
                         {l}
                       </option>

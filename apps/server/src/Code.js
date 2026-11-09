@@ -152,6 +152,11 @@ function runHisab() {
       var pPhotos = query_(parent, 'photos', 'serverStatus', ENTRY_STATUS_PENDING);
       // Bakaya udhaar (stock / store) aur katauti se bhi badalta hai; overdue ke din roz badalte hain
       var lsum = getDoc_(parent + '/ledgerSummary/current');
+      if (lsum && lsum.data.asOf !== today && !pLogs.length && !pDeds.length) {
+        var curM = today.slice(0, 7);
+        var prevM = BPMCCore.addDays(curM + '-01', -1).slice(0, 7);
+        syncMachineLedger_(parent, p.id, [prevM, curM], ctx);
+      }
       if (pLedger.length || pStock.length || pStore.length || pWork.length || (lsum && lsum.data.asOf !== today)) ledgerDirty[p.id] = 1;
       var all = pStock.concat(pLogs, pDeds, pMuster, pStaff, pPass, pLabAtt, pLabPass, pStore, pServ, pLedger, pWork, pPhotos);
       if (!all.length) return;
@@ -169,7 +174,11 @@ function runHisab() {
         out.stock = hisabStock_(parent, pStock, ctx);
         out.udhaar = hisabUdhaar_(parent, p.id, pStock, { inType: 'IN', prefix: 'sm_', col: 'stockMoves' });
       }
-      if (pLogs.length || pDeds.length) out.machines = hisabMachines_(parent, pLogs, pDeds, ctx);
+      if (pLogs.length || pDeds.length) {
+        out.machines = hisabMachines_(parent, pLogs, pDeds, ctx);
+        out.machineLedger = syncMachineLedger_(parent, p.id, out.machines.months, ctx);
+        ledgerDirty[p.id] = 1;
+      }
       if (pMuster.length || pStaff.length || pPass.length || pLabAtt.length) out.attendance = hisabAttendance_(parent, pMuster.concat(pLabAtt), pStaff, pPass, ctx);
       if (pLabAtt.length || pLabPass.length) out.labour = hisabLabour_(parent, pLabAtt, pLabPass, ctx);
       out.notMarked = markDone_(all);
@@ -466,6 +475,57 @@ function photoGet_(b) {
   return { ok: true, mime: blob.getContentType(), data: Utilities.base64Encode(blob.getBytes()) };
 }
 
+/**
+ * Rental machine ka mahine ka bill (machineBills/{machine}_{YYYY-MM}) → malik (masters_machines.ownerPartyId) ke khate mein:
+ *   ledger/mb_{machine}_{month}  BILL        = rental
+ *   ledger/md_{machine}_{month}  DEBIT_NOTE  = advance / site se liya hua (kata hua)
+ * Malik link na ho, bill 0 ho, ya bill mein error ho to khate se hata (soft-delete). Bill ki tarikh = mahine ka aakhri din.
+ */
+function syncMachineLedger_(parent, pid, months, ctx) {
+  if (!ctx.machines) {
+    ctx.machines = {};
+    listDocs_('masters_machines').forEach(function (m) { ctx.machines[m.id] = m.data; });
+  }
+  var parties = {};
+  listDocs_('masters_parties').forEach(function (d) { parties[d.id] = d.data.name || d.id; });
+  var writes = [];
+  var now = new Date();
+  function upsert(path, existing, want, fields) {
+    if (!want) {
+      if (existing && !existing.data.deleted) writes.push(serverSoftDelete_(path, existing, 'Machine bill changed'));
+      return;
+    }
+    var f = {
+      projectId: pid, partyKind: 'PARTY', deleted: null, serverStatus: 'DONE', createdBy: existing ? existing.data.createdBy : 'server',
+      createdAt: existing ? existing.data.createdAt : now, updatedBy: 'server', updatedAt: now, rev: existing ? (existing.data.rev || 1) + 1 : 1, lastAuditId: null,
+    };
+    Object.keys(fields).forEach(function (k) { f[k] = fields[k]; });
+    writes.push({ update: { name: fullName_(path), fields: encFields_(f) } });
+  }
+  var seen = {};
+  months.forEach(function (month) {
+    if (seen[month]) return;
+    seen[month] = 1;
+    var end = month + '-' + ('0' + BPMCCore.daysInMonth(month)).slice(-2);
+    query_(parent, 'machineBills', 'month', month).forEach(function (b) {
+      var mid = b.id.replace(/_\d{4}-\d{2}$/, '');
+      var m = ctx.machines[mid] || {};
+      var owner = m.ownerPartyId && !m.deleted ? m.ownerPartyId : null;
+      var ok = !!owner && !b.data.error && b.data.rentalPaise != null;
+      var name = owner ? (parties[owner] || null) : null;
+      var billPath = parent + '/ledger/mb_' + mid + '_' + month;
+      var dedPath = parent + '/ledger/md_' + mid + '_' + month;
+      var base = { businessDate: end, partyId: owner, partyName: name, itemName: (b.data.machineName || m.name || mid) + ' — rental ' + month, source: 'machineBills/' + b.id };
+      var rent = ok ? Number(b.data.rentalPaise) || 0 : 0;
+      var ded = ok ? Number(b.data.deductionPaise) || 0 : 0;
+      upsert(billPath, getDoc_(billPath), ok && rent > 0, Object.assign({}, base, { type: 'BILL', amountPaise: rent, basePaise: rent, gstPaise: 0, description: 'Machine rental bill' }));
+      upsert(dedPath, getDoc_(dedPath), ok && ded > 0, Object.assign({}, base, { type: 'DEBIT_NOTE', amountPaise: ded, description: 'Advance / site material deducted' }));
+    });
+  });
+  if (writes.length) commit_(writes);
+  return writes.length;
+}
+
 /** Server ka soft-delete (reason ke saath) */
 function serverSoftDelete_(path, existing, reason) {
   var now = new Date();
@@ -747,7 +807,7 @@ function hisabMachinesInner_(parent, pLogs, pDeds, ctx) {
     });
   });
   if (writes.length) commit_(writes);
-  return { dates: Object.keys(dates).length, bills: bills };
+  return { dates: Object.keys(dates).length, bills: bills, months: Object.keys(months) };
 }
 
 /**
