@@ -54,7 +54,9 @@
 - ✅ Machine rental bill → malik ka khata (9 Nov 2026, TDD server e2e): Masters → Machines mein naya "Owner party (for khata)" dropdown (purana text "Owner / party" jaisa ka waisa). Mahine ka rental `ledger/mb_<machine>_<mahina>` BILL, advance / site material `ledger/md_…` DEBIT_NOTE (tarikh = mahine ka aakhri din); malik link na ho / bill 0 / log hata → khate se hata; roz ek baar bhi sync (malik baad mein jodne par). Server e2e 73.
   - Test fix: Poclain 200 ka e2e "20 tarikh ko aayi" hardcode tha — 20 se pehle ke din par fail hota tha; ab kisi bhi din chalta hai.
 - ✅ Thekedar ka khata (9 Nov 2026, TDD): Creditors mein thekedar ko Payment / Advance; Master mein har thekedar ka option "labour ka paisa bill se kaato" (sirf "We pay the labour" par) → company ne us labour ko jo diya wo `ledger/lp_<passbookId>` PAYMENT / LABOUR; statement + PDF (Reports → Contractor khata): opening + kaam bill − advance − labour − bhugtan − katauti = baaki. Tests: core 139, rules 50, server e2e 81.
-- ⏳ Baaki Phase 2: `bpmc-site-live` project
+- ✅ Live project (9 Nov 2026): `bpmc-site-live` (Spark, Firestore asia-south1, Google + email link), hosting https://bpmc-site-live.web.app, alag "BPMC Server (live)" Apps Script (`apps/server/.clasp.live.json`, `.env.live`). Test ka backup / photo ab `AI obsidian\_BPMC TEST`. **Baaki:** Rohit ka Google Allow → setupLive → bootstrapPhase1 → installTriggers. Live par Phase 2 tak ka code hai; DPR abhi sirf test par.
+- ✅ Phase 3 — DPR (9 Nov 2026, TDD, test par): server snapshot sirf asli entries se, English / हिंदी; Draft → Lock (approve karne wale ka naam) → version; locked din badla to naya version (purane din ka diesel badla to aage ke din bhi), purana safe; Obsidian `Daily Report\saal\mahina\` md + json + pdf; app se PDF, WhatsApp, Copy. Tests: core 154, rules 51, server e2e 94.
+- ⏳ Baaki Phase 3: alerts + notifications; bina lock wale din ki DPR Obsidian mein.
 - Phase 3: DPR (lock / version / PDF / WhatsApp / Obsidian md + json + pdf), alerts + notifications, Memory JSON. Phase 4: Help Center, AI, Hindi toggle, offline jaanch, weekly / monthly report, purana data.
 
 ## Phase 1 — haal (24 Oct 2026) ✅
