@@ -53,7 +53,8 @@
 - ✅ Site photos (25 Oct 2026, TDD): phone par 1600 px JPEG, GPS + samay → Apps Script web app (Google ID token verify, project member + entry.create) → Drive `<vault>\Photos\saal\mahina\`; `photos` entry (audit, soft-delete, Drive file safe); dekhna sirf entry mein likhi file (token ke saath). Daily Work entry + "Site photos" + Store inward ke bill par 📷. **Setup:** Apps Script editor mein `setupPhotos` ek baar chalana (FIREBASE_WEB_API_KEY property); web app URL `VITE_PHOTO_URL` (.env.local). Tests: core 136, rules 50, server e2e 67.
 - ✅ Machine rental bill → malik ka khata (9 Nov 2026, TDD server e2e): Masters → Machines mein naya "Owner party (for khata)" dropdown (purana text "Owner / party" jaisa ka waisa). Mahine ka rental `ledger/mb_<machine>_<mahina>` BILL, advance / site material `ledger/md_…` DEBIT_NOTE (tarikh = mahine ka aakhri din); malik link na ho / bill 0 / log hata → khate se hata; roz ek baar bhi sync (malik baad mein jodne par). Server e2e 73.
   - Test fix: Poclain 200 ka e2e "20 tarikh ko aayi" hardcode tha — 20 se pehle ke din par fail hota tha; ab kisi bhi din chalta hai.
-- ⏳ Baaki Phase 2: thekedar ka khata (kaam bill − advance − katauti ka statement + PDF), `bpmc-site-live` project
+- ✅ Thekedar ka khata (9 Nov 2026, TDD): Creditors mein thekedar ko Payment / Advance; Master mein har thekedar ka option "labour ka paisa bill se kaato" (sirf "We pay the labour" par) → company ne us labour ko jo diya wo `ledger/lp_<passbookId>` PAYMENT / LABOUR; statement + PDF (Reports → Contractor khata): opening + kaam bill − advance − labour − bhugtan − katauti = baaki. Tests: core 139, rules 50, server e2e 81.
+- ⏳ Baaki Phase 2: `bpmc-site-live` project
 - Phase 3: DPR (lock / version / PDF / WhatsApp / Obsidian md + json + pdf), alerts + notifications, Memory JSON. Phase 4: Help Center, AI, Hindi toggle, offline jaanch, weekly / monthly report, purana data.
 
 ## Phase 1 — haal (24 Oct 2026) ✅
