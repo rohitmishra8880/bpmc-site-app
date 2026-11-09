@@ -4,7 +4,7 @@ import { collection, doc, getDocs, onSnapshot, query, where, type DocumentData }
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
-  addDays, dateRange, daysInMonth, workAmount, workStatement, WORK_UNIT, type WorkEntryLite, type WorkType,
+  addDays, contractorStatement, dateRange, daysInMonth, workAmount, workStatement, WORK_UNIT, type WorkEntryLite, type WorkType,
   formatDate, formatINR, formatQtyShort, labourEarning, latestMarks, runningLedger, toBusinessDateIST, weekStart,
   type DayItemBalance, type LabourMark, type StoreStatementRow,
 } from "@bpmc/core";
@@ -15,7 +15,7 @@ import { useProjects } from "../lib/projects";
 import { PageHead } from "../lib/ui";
 import { measureText } from "./Work";
 
-type Kind = "staff" | "labour" | "machinery" | "stock" | "store" | "ledger" | "work" | "dpr";
+type Kind = "staff" | "labour" | "machinery" | "stock" | "store" | "ledger" | "contractor" | "work" | "dpr";
 const REPORTS: { k: Kind; ic: string; label: string; sub: string; soon?: string; landscape: boolean }[] = [
   { k: "staff", ic: "🧑‍💼", label: "Staff attendance & khata", sub: "Month — P / HD / A, earned, paid, balance", landscape: true },
   { k: "labour", ic: "👷", label: "Labour — company / contractor", sub: "Week or month — day-wise attendance, OT, amount, paid", landscape: true },
@@ -23,6 +23,7 @@ const REPORTS: { k: Kind; ic: string; label: string; sub: string; soon?: string;
   { k: "stock", ic: "📦", label: "Material stock", sub: "Date range — day-wise opening, received, used, balance", landscape: false },
   { k: "store", ic: "🧰", label: "Store register", sub: "Month — statement, movements, with contractors", landscape: true },
   { k: "ledger", ic: "📒", label: "Party / contractor ledger", sub: "Bills, payments, debit notes, recovery — running balance", landscape: false },
+  { k: "contractor", ic: "🧾", label: "Contractor khata", sub: "Date range — work bill, advance, labour paid, recovery, balance", landscape: false },
   { k: "work", ic: "📅", label: "Contractor work (day-wise)", sub: "Date range — measurement, rate and bill, contractor by contractor", landscape: false },
   { k: "dpr", ic: "📄", label: "Daily Progress Report (DPR)", sub: "English / हिंदी, signatures", soon: "Phase 3", landscape: false },
 ];
@@ -120,8 +121,9 @@ export function Reports() {
     title = `Labour — ${groupName}`;
     period = labourPeriod === "week" ? `Week ${formatDate(lFrom)} to ${formatDate(lTo)}` : monthLabel(month);
   }
-  if (r.k === "stock" || r.k === "work") period = `${formatDate(from)} to ${formatDate(to)}`;
+  if (r.k === "stock" || r.k === "work" || r.k === "contractor") period = `${formatDate(from)} to ${formatDate(to)}`;
   if (r.k === "work") title = `Contractor work — ${wcon ? (wcon === "COMPANY" ? "Company (own work)" : (contractors.find((c) => c.id === wcon)?.name ?? wcon)) : "all contractors"}`;
+  if (r.k === "contractor") title = `Contractor khata — ${partyName || "select a contractor"}`;
   if (r.k === "ledger") {
     title = `Ledger — ${partyName || "select a party"}`;
     period = `Up to ${formatDate(today)}`;
@@ -132,7 +134,7 @@ export function Reports() {
       <div className="no-print" style={{ display: "grid", gap: 12 }}>
         <PageHead title={r.label} sub={r.sub}>
           <button className="btn" onClick={() => setParams({})}>← All reports</button>
-          <button className="btn primary" onClick={() => downloadPdf(current.name, title, period, r.landscape)} disabled={r.k === "ledger" && !party}>
+          <button className="btn primary" onClick={() => downloadPdf(current.name, title, period, r.landscape)} disabled={(r.k === "ledger" || r.k === "contractor") && !party}>
             ⬇ Download PDF
           </button>
         </PageHead>
@@ -181,7 +183,18 @@ export function Reports() {
               </select>
             </div>
           )}
-          {(r.k === "stock" || r.k === "work") && (
+          {r.k === "contractor" && (
+            <div className="field">
+              <label htmlFor="rp-con">Contractor</label>
+              <select id="rp-con" className="input" value={party} onChange={(e) => setParty(e.target.value)}>
+                <option value="">— select —</option>
+                {contractors.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {(r.k === "stock" || r.k === "work" || r.k === "contractor") && (
             <>
               <div className="field">
                 <label htmlFor="rp-from">From</label>
@@ -223,6 +236,7 @@ export function Reports() {
         {r.k === "stock" && <StockBody pid={current.id} from={from <= to ? from : to} to={from <= to ? to : from} />}
         {r.k === "store" && <StoreBody pid={current.id} month={month} contractors={contractors} />}
         {r.k === "work" && <WorkBody pid={current.id} from={from <= to ? from : to} to={from <= to ? to : from} contractorId={wcon} contractors={contractors} />}
+        {r.k === "contractor" && (party ? <ContractorBody pid={current.id} partyId={party} from={from <= to ? from : to} to={from <= to ? to : from} /> : <p>Select a contractor.</p>)}
         {r.k === "ledger" && (party ? <LedgerBody pid={current.id} partyId={party} /> : <p>Select a party or contractor.</p>)}
       </Sheet>
     </>
@@ -840,6 +854,71 @@ function WorkBody({ pid, from, to, contractorId, contractors }: { pid: string; f
       {ids.length === 0 && <p className="note-line">No work entries in this period.</p>}
       {ids.filter((i) => i !== "COMPANY").length > 1 && <p className="note-line"><b>All contractors — total bill: {formatINR(grand)}</b></p>}
       <p className="note-line">Qty: concrete / excavation = L × W × H × nos; shuttering = L × height × nos; steel = D² ÷ 162 × length × nos. Amount = qty × rate saved on the entry. Payments and balance: see the contractor khata (Creditors).</p>
+    </>
+  );
+}
+
+// ---------------- Contractor khata ----------------
+function ContractorBody({ pid, partyId, from, to }: { pid: string; partyId: string; from: string; to: string }) {
+  const [rows, setRows] = useState<DocumentData[] | null>(null);
+  useEffect(() => {
+    setRows(null);
+    return onSnapshot(query(collection(db, "projects", pid, "ledger"), where("partyId", "==", partyId)), (q) => setRows(q.docs.map((d) => ({ id: d.id, ...d.data() }))));
+  }, [pid, partyId]);
+  if (!rows) return <Loading />;
+  const st = contractorStatement(rows.map((r) => ({ id: r.id, businessDate: r.businessDate, type: r.type, amountPaise: r.amountPaise ?? 0, paymentKind: r.paymentKind ?? null, deleted: r.deleted })), from, to);
+  const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
+  const label = (t: string, k?: string | null) => (k === "ADVANCE" ? "Advance" : k === "LABOUR" ? "Labour paid" : t === "BILL" ? "Work bill" : t === "PAYMENT" ? "Payment" : t === "RECOVERY" ? "Recovery" : "Debit note");
+  const line = (l: string, v: number, sign: string, bold?: boolean) => (
+    <tr className={bold ? "tot" : undefined}>
+      <td>{l}</td>
+      <td className="r">{sign}{formatINR(v)}</td>
+    </tr>
+  );
+  return (
+    <>
+      <h2>Summary</h2>
+      <table style={{ maxWidth: 420 }}>
+        <tbody>
+          {line("Opening balance", st.openingPaise, "")}
+          {line("Work bill", st.workBillPaise, "+ ")}
+          {line("Advance", st.advancePaise, "− ")}
+          {line("Labour paid by company", st.labourPaidPaise, "− ")}
+          {line("Payments", st.paidPaise, "− ")}
+          {line("Recovery / debit notes", st.lessPaise, "− ")}
+          {line("Balance", st.closingPaise, "", true)}
+        </tbody>
+      </table>
+      <h2>Entries</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Type</th>
+            <th>Particulars</th>
+            <th className="r">Bill</th>
+            <th className="r">Paid / less</th>
+            <th className="r">Balance</th>
+          </tr>
+        </thead>
+        <tbody>
+          {st.rows.map((l) => {
+            const x = byId[l.id]!;
+            return (
+              <tr key={l.id}>
+                <td>{formatDate(l.businessDate)}</td>
+                <td>{label(l.type, l.paymentKind)}</td>
+                <td>{[x.itemName, x.qty != null && `${formatQtyShort(Number(x.qty))} ${x.unit ?? ""}`, x.billNo && `Bill ${x.billNo}`, x.description, x.mode, x.refNo, x.remark].filter(Boolean).join(" · ")}</td>
+                <td className="r">{l.debitPaise ? formatINR(l.debitPaise) : ""}</td>
+                <td className="r">{l.creditPaise ? formatINR(l.creditPaise) : ""}</td>
+                <td className={`r ${l.balancePaise < 0 ? "neg" : ""}`}>{formatINR(l.balancePaise)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {st.rows.length === 0 && <p className="note-line">No entries in this period.</p>}
+      <p className="note-line">Balance = opening + work bill − advance − labour paid − payments − recovery. + = company has to pay; − = to be recovered from the contractor.</p>
     </>
   );
 }

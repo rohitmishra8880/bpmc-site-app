@@ -161,6 +161,18 @@ put("projects/KDG/machineLogs/J1", KP({ businessDate: today, machineId: "jcb1", 
 put("projects/KDG/machineLogs/J2", KP({ businessDate: today, machineId: "jcb2", status: "FULL", sr: 10, cr: 18, dieselLtr: 0 }));
 put("projects/KDG/machineDeductions/JD1", KP({ businessDate: today, machineId: "jcb1", kind: "DRIVER_ADVANCE", amountPaise: 100000 }));
 
+// Thekedar ka khata: labour ka paisa bill se (Kondagaon)
+put("masters_contractors/raju", { name: "Raju", labourPaidBy: "US", deductLabour: "YES", deleted: null });
+put("masters_contractors/mohan", { name: "Mohan", labourPaidBy: "US", deductLabour: "NO", deleted: null });
+put("masters_contractors/vinod", { name: "Vinod", labourPaidBy: "CONTRACTOR", deductLabour: "YES", deleted: null });
+for (const [id, group] of [["LR", "raju"], ["LM", "mohan"], ["LV", "vinod"], ["LC", "COMPANY"]]) put(`projects/KDG/labour/${id}`, { name: `Labour ${id}`, type: "KULI", ratePaise: 60000, group, deleted: null });
+put("projects/KDG/workEntries/RW", KP({ businessDate: yday, type: "CONCRETE", contractorId: "raju", contractorName: "Raju", qty: 10, unit: "M³", ratePaise: 100000 }));
+put("projects/KDG/labourPassbook/P1", KP({ businessDate: today, labourId: "LR", kind: "ADVANCE", amountPaise: 500000, mode: "CASH" }));
+put("projects/KDG/labourPassbook/P2", KP({ businessDate: today, labourId: "LM", kind: "ADVANCE", amountPaise: 300000, mode: "CASH" }));
+put("projects/KDG/labourPassbook/P3", KP({ businessDate: today, labourId: "LV", kind: "ADVANCE", amountPaise: 200000, mode: "CASH" }));
+put("projects/KDG/labourPassbook/P4", KP({ businessDate: today, labourId: "LC", kind: "ADVANCE", amountPaise: 100000, mode: "CASH" }));
+put("projects/KDG/labourPassbook/P5", KP({ businessDate: today, labourId: "LR", kind: "ADVANCE", amountPaise: 900000, mode: "CASH", deleted: { by: "x", reason: "galti" } }));
+
 // Photos: users / roles
 put("roles/site", { permissions: ["entry.create", "entry.edit"] });
 put("users/admin@bpmc", { active: true, role: "admin", projectIds: [] });
@@ -307,6 +319,22 @@ put("projects/NEWS", { name: "New Site", vault: "NEW" });
 put(`projects/NEWS/machineBills/jcb1_${mmonth}`, { month: mmonth, machineName: "JCB 3DX", rentalPaise: 100000, deductionPaise: 0, error: null });
 S.runHisab();
 expect("Machine bill: summary na ho tab bhi sync + summary ban jaaye", [get(`projects/NEWS/ledger/mb_jcb1_${mmonth}`)?.data?.amountPaise, get("projects/NEWS/ledgerSummary/current")?.data?.parties?.mahavir?.bakayaPaise, get("projects/NEWS/ledgerSummary/current")?.data?.asOf], [100000, 100000, today]);
+
+// ---- Thekedar ka khata: company ne labour ko diya → bill se kata ----
+const lp = get("projects/KDG/ledger/lp_P1")?.data;
+expect("Thekedar: Raju (We pay + kaato = Yes) ki labour ko diya ₹5,000 uske khate mein PAYMENT / LABOUR", [lp?.type, lp?.paymentKind, lp?.partyId, lp?.partyKind, lp?.amountPaise, lp?.source], ["PAYMENT", "LABOUR", "raju", "CONTRACTOR", 500000, "labourPassbook/P1"]);
+expect("Thekedar: kaato = No, Contractor pays, Company labour, hataayi entry → kuch nahi", ["P2", "P3", "P4", "P5"].map((k) => get(`projects/KDG/ledger/lp_${k}`)), [null, null, null, null]);
+expect("Thekedar: Raju ka baaki = kaam ₹10,000 − labour ₹5,000 = ₹5,000", get("projects/KDG/ledgerSummary/current")?.data?.parties?.raju?.bakayaPaise, 500000);
+put("projects/KDG/labourPassbook/P1", KP({ rev: 2, businessDate: today, labourId: "LR", kind: "ADVANCE", amountPaise: 600000, mode: "CASH" }));
+S.runHisab();
+expect("Thekedar edit: ₹6,000 → khata bhi ₹6,000; baaki ₹4,000", [get("projects/KDG/ledger/lp_P1")?.data?.amountPaise, get("projects/KDG/ledger/lp_P1")?.data?.rev, get("projects/KDG/ledgerSummary/current")?.data?.parties?.raju?.bakayaPaise], [600000, 2, 400000]);
+put("projects/KDG/ledgerSummary/current", { asOf: yday, parties: {}, totals: {} });
+S.runHisab();
+expect("Thekedar: roz ke sync mein bina badlav rev nahi badhta", get("projects/KDG/ledger/lp_P1")?.data?.rev, 2);
+put("masters_contractors/raju", { name: "Raju", labourPaidBy: "US", deductLabour: "NO", deleted: null });
+put("projects/KDG/ledgerSummary/current", { asOf: yday, parties: {}, totals: {} });
+S.runHisab();
+expect("Thekedar: Master mein kaato = No kiya → labour wali entry khate se hati, baaki ₹10,000", [!!get("projects/KDG/ledger/lp_P1")?.data?.deleted, get("projects/KDG/ledgerSummary/current")?.data?.parties?.raju?.bakayaPaise], [true, 1000000]);
 
 // ---- Photos: Drive upload (doPost) ----
 const TOKENS = { good: "munshi@bpmc", adm: "admin@bpmc", out: "other@bpmc", off: "old@bpmc" };

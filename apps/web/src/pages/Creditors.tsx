@@ -15,7 +15,7 @@ import { PaymentFields, payData, payStateValid, type PayState } from "./LabourWe
 
 type Kind = "BILL" | "PAYMENT" | "DEBIT_NOTE";
 const TYPE_LABEL: Record<string, string> = { BILL: "Bill", PAYMENT: "Payment", DEBIT_NOTE: "Debit note", RECOVERY: "Recovery" };
-const SOURCE_LABEL = (src?: string) => (src?.startsWith("stockMoves") ? "Auto · Inventory credit" : src?.startsWith("storeMoves") ? "Auto · Store" : src?.startsWith("workEntries") ? "Auto · Daily Work" : src?.startsWith("machineBills") ? "Auto · Machine rental" : "Auto");
+const SOURCE_LABEL = (src?: string) => (src?.startsWith("stockMoves") ? "Auto · Inventory credit" : src?.startsWith("storeMoves") ? "Auto · Store" : src?.startsWith("workEntries") ? "Auto · Daily Work" : src?.startsWith("machineBills") ? "Auto · Machine rental" : src?.startsWith("labourPassbook") ? "Auto · Labour paid by company" : "Auto");
 
 interface Summary {
   asOf: string;
@@ -153,7 +153,7 @@ function KhataDialog({ pid, partyId, name, status, canAdd, onAdd, onEdit, onClos
   pid: string;
   partyId: string;
   name: string;
-  status: PartyStatus | null;
+  status: (PartyStatus & { kind?: string }) | null;
   canAdd: boolean;
   onAdd: (k: Kind) => void;
   onEdit: (row: Entry) => void;
@@ -190,7 +190,7 @@ function KhataDialog({ pid, partyId, name, status, canAdd, onAdd, onEdit, onClos
               {status.overduePaise ? ` · overdue ${formatINR(status.overduePaise)}` : ""}
             </span>
           )}
-          <Link className="btn sm" to={`/reports?r=ledger&p=${partyId}`}>⬇ PDF</Link>
+          <Link className="btn sm" to={`/reports?r=${status?.kind === "CONTRACTOR" ? "contractor" : "ledger"}&p=${partyId}`}>⬇ PDF</Link>
           {canAdd && (
             <>
               <button className="btn sm" onClick={() => onAdd("BILL")}>＋ Bill</button>
@@ -219,7 +219,7 @@ function KhataDialog({ pid, partyId, name, status, canAdd, onAdd, onEdit, onClos
                   <tr key={l.id}>
                     <td>{formatDate(l.businessDate)}</td>
                     <td>
-                      {TYPE_LABEL[l.type] ?? l.type}
+                      {r.paymentKind === "ADVANCE" ? "Advance" : r.paymentKind === "LABOUR" ? "Labour paid" : (TYPE_LABEL[l.type] ?? l.type)}
                       {r.serverStatus === "PENDING" && " ⏳"}
                     </td>
                     <td className="wrap small">
@@ -296,6 +296,7 @@ function EntryForm({ kind, partyId, row, date, parties, contractors, status, onC
     description: (row?.description as string) ?? "",
     remark: (row?.remark as string) ?? "",
   });
+  const [advance, setAdvance] = useState(row?.paymentKind === "ADVANCE");
   const [pay, setPay] = useState<PayState>({ mode: (row?.mode as string) ?? "CASH", accountId: (row?.accountId as string) ?? "", refNo: (row?.refNo as string) ?? "" });
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -320,7 +321,7 @@ function EntryForm({ kind, partyId, row, date, parties, contractors, status, onC
       kind === "BILL"
         ? { ...base, amountPaise: bill!.totalPaise, basePaise: bill!.basePaise, gstPct: gst || null, gstPaise: bill!.gstPaise, billNo: v.billNo.trim() || null, description: v.description.trim() || null }
         : kind === "PAYMENT"
-          ? { ...base, amountPaise: toPaise(amt), ...payData(pay, accounts) }
+          ? { ...base, amountPaise: toPaise(amt), paymentKind: isContractor && advance ? "ADVANCE" : null, ...payData(pay, accounts) }
           : { ...base, amountPaise: toPaise(amt) };
     setBusy(true);
     try {
@@ -379,6 +380,15 @@ function EntryForm({ kind, partyId, row, date, parties, contractors, status, onC
                 <input id="c-desc" className="input" value={v.description} onChange={(e) => setV({ ...v, description: e.target.value })} placeholder="e.g. 200 bags cement, RA bill 1" />
               </div>
             </>
+          )}
+          {kind === "PAYMENT" && isContractor && (
+            <div className="field">
+              <span style={{ fontWeight: 600, fontSize: 14 }}>This is</span>
+              <div className="checks">
+                <button type="button" className="tab" aria-pressed={!advance} onClick={() => setAdvance(false)}>Payment</button>
+                <button type="button" className="tab" aria-pressed={advance} onClick={() => setAdvance(true)}>Advance</button>
+              </div>
+            </div>
           )}
           {kind === "PAYMENT" && <PaymentFields v={pay} setV={setPay} accounts={accounts} />}
         </div>

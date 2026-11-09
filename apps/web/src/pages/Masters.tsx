@@ -66,6 +66,7 @@ const MASTERS: { col: string; label: string; one: string; fields: Field[]; admin
       { key: "mobile", label: "Mobile", type: "mobile", show: true },
       { key: "work", label: "Work type", type: "text", show: true, hint: "e.g. shuttering, bar bending" },
       { key: "labourPaidBy", label: "Who pays this contractor's labour", type: "select", required: true, show: true, options: [["CONTRACTOR", "Contractor pays (we only record)"], ["US", "We pay the labour"]] },
+      { key: "deductLabour", label: "Deduct labour payments from contractor bill", type: "select", options: [["NO", "No — labour hisab stays separate"], ["YES", "Yes — deduct what the company paid"]], hint: "Only applies when the company pays this contractor's labour. Blank = No." },
       { key: "accountName", label: "Account holder name", type: "text" },
       { key: "bankName", label: "Bank name", type: "text", hint: "e.g. State Bank of India" },
       { key: "accountNo", label: "Account no.", type: "account", show: true },

@@ -39,6 +39,8 @@ export interface LedgerLine {
   businessDate: string;
   type: LedgerEntryType;
   amountPaise: Paise;
+  /** PAYMENT ka prakar: ADVANCE, LABOUR (company ne labour ko diya), khali = bhugtan */
+  paymentKind?: string | null;
   deleted?: unknown;
 }
 

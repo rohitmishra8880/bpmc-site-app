@@ -157,7 +157,8 @@ function runHisab() {
         var prevM = BPMCCore.addDays(curM + '-01', -1).slice(0, 7);
         syncMachineLedger_(parent, p.id, [prevM, curM], ctx);
       }
-      if (pLedger.length || pStock.length || pStore.length || pWork.length || !lsum || lsum.data.asOf !== today) ledgerDirty[p.id] = 1;
+      if (pLabPass.length || !lsum || lsum.data.asOf !== today) syncContractorLabour_(parent, p.id, ctx);
+      if (pLedger.length || pStock.length || pStore.length || pWork.length || pLabPass.length || !lsum || lsum.data.asOf !== today) ledgerDirty[p.id] = 1;
       var all = pStock.concat(pLogs, pDeds, pMuster, pStaff, pPass, pLabAtt, pLabPass, pStore, pServ, pLedger, pWork, pPhotos);
       if (!all.length) return;
       var out = {};
@@ -520,6 +521,50 @@ function syncMachineLedger_(parent, pid, months, ctx) {
       var ded = ok ? Number(b.data.deductionPaise) || 0 : 0;
       upsert(billPath, getDoc_(billPath), ok && rent > 0, Object.assign({}, base, { type: 'BILL', amountPaise: rent, basePaise: rent, gstPaise: 0, description: 'Machine rental bill' }));
       upsert(dedPath, getDoc_(dedPath), ok && ded > 0, Object.assign({}, base, { type: 'DEBIT_NOTE', amountPaise: ded, description: 'Advance / site material deducted' }));
+    });
+  });
+  if (writes.length) commit_(writes);
+  return writes.length;
+}
+
+/**
+ * Master mein "We pay the labour" + "bill se kaato = Yes" wale thekedar ki labour ko company ne jo diya →
+ * uske khate mein PAYMENT / LABOUR (ledger/lp_<passbookId>). Entry hati, ya Master badla → khate se hata. Bina badlav dobara nahi likhta.
+ */
+function syncContractorLabour_(parent, pid, ctx) {
+  if (!ctx.contractors) {
+    ctx.contractors = {};
+    listDocs_('masters_contractors').forEach(function (d) { ctx.contractors[d.id] = d.data; });
+  }
+  var labour = labourMap_(parent);
+  var existing = {};
+  query_(parent, 'ledger').forEach(function (d) { if (d.id.indexOf('lp_') === 0) existing[d.id] = d; });
+  var writes = [];
+  var now = new Date();
+  query_(parent, 'labourPassbook').forEach(function (d) {
+    var x = d.data;
+    var l = labour[x.labourId] || {};
+    var c = ctx.contractors[l.group];
+    var id = 'lp_' + d.id;
+    var cur = existing[id];
+    var path = parent + '/ledger/' + id;
+    var amt = Number(x.amountPaise) || 0;
+    var want = !x.deleted && c && !c.deleted && c.labourPaidBy === 'US' && c.deductLabour === 'YES' && amt > 0 && x.businessDate;
+    if (!want) {
+      if (cur && !cur.data.deleted) writes.push(serverSoftDelete_(path, cur, x.deleted ? 'Labour payment was deleted' : 'Labour is no longer deducted for this contractor'));
+      return;
+    }
+    if (cur && !cur.data.deleted && cur.data.amountPaise === amt && cur.data.businessDate === x.businessDate && cur.data.partyId === l.group) return;
+    writes.push({
+      update: {
+        name: fullName_(path),
+        fields: encFields_({
+          projectId: pid, businessDate: x.businessDate, type: 'PAYMENT', paymentKind: 'LABOUR', partyId: l.group, partyKind: 'CONTRACTOR', partyName: c.name || null,
+          amountPaise: amt, itemName: l.name || x.labourId, mode: x.mode || null, description: 'Labour paid by company', source: 'labourPassbook/' + d.id, remark: x.remark || null,
+          deleted: null, serverStatus: 'DONE', createdBy: cur ? cur.data.createdBy : 'server', createdAt: cur ? cur.data.createdAt : now,
+          updatedBy: 'server', updatedAt: now, rev: cur ? (cur.data.rev || 1) + 1 : 1, lastAuditId: null,
+        }),
+      },
     });
   });
   if (writes.length) commit_(writes);
