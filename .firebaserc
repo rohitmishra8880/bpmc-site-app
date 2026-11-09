@@ -1,6 +1,7 @@
 {
   "projects": {
     "default": "bpmc-site-test",
-    "test": "bpmc-site-test"
+    "test": "bpmc-site-test",
+    "live": "bpmc-site-live"
   }
 }

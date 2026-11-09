@@ -1053,7 +1053,9 @@ var GLOBAL_COLLECTIONS = ['users', 'roles', 'settings', 'projects', 'masters_mat
 function obsidianRoot_() {
   var it = DriveApp.getRootFolder().getFoldersByName(OBSIDIAN_ROOT);
   if (!it.hasNext()) throw new Error('Folder "' + OBSIDIAN_ROOT + '" not found in My Drive');
-  return it.next();
+  var root = it.next();
+  // Asli vault sirf live ke liye; test ka backup / photo alag folder mein (mix na ho)
+  return fsProject_() === 'bpmc-site-live' ? root : folderPath_(root, '_BPMC TEST');
 }
 /** "kondagaon site/kondagaon pawada anicut" jaisa raasta — jo folder nahi hai sirf wahi banata hai */
 function folderPath_(parent, path) {

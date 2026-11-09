@@ -342,7 +342,8 @@ S.verifyIdToken_ = (t) => TOKENS[t] ?? null;
 const jpg = Buffer.from("fake-jpeg-bytes").toString("base64");
 const up = (o) => JSON.parse(S.doPost({ postData: { contents: JSON.stringify({ action: "upload", pid: "KSK", date: today, time: "10:24", label: "Concrete / Footing F1", seq: 1, mime: "image/jpeg", data: jpg, lat: 18.94568, lng: 81.35123, accuracyM: 12, takenAt: new Date().toISOString(), ...o }) } }).text);
 const good = up({ token: "good" });
-expect("Photo: member ne upload kiya → Drive mein vault\\Photos\\saal\\mahina", [good.ok, S.DriveApp._files.get(good.fileId)?.path], [true, "/AI obsidian/EMRS KESHKAL/Photos/" + today.slice(0, 4) + "/" + today.slice(5, 7) + "-" + ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][Number(today.slice(5, 7)) - 1] + "/" + today + " 1024 Concrete - Footing F1 1.jpg"]);
+expect("Photo: member ne upload kiya → Drive mein vault\\Photos\\saal\\mahina", [good.ok, S.DriveApp._files.get(good.fileId)?.path], [true, "/AI obsidian/_BPMC TEST/EMRS KESHKAL/Photos/" + today.slice(0, 4) + "/" + today.slice(5, 7) + "-" + ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][Number(today.slice(5, 7)) - 1] + "/" + today + " 1024 Concrete - Footing F1 1.jpg"]);
+{ const realP = S.fsProject_; S.fsProject_ = () => "bpmc-site-live"; expect("Live project ka backup / photo asli vault mein; test ka _BPMC TEST mein", S.obsidianRoot_().path, "/AI obsidian"); S.fsProject_ = realP; }
 expect("Photo: Admin kisi bhi project mein", up({ token: "adm", pid: "DNT" }).ok, true);
 expect("Photo: dusre project ka user nahi", [up({ token: "out" }).ok, up({ token: "out" }).error], [false, "No access to this project"]);
 expect("Photo: band (inactive) user nahi; galat token nahi", [up({ token: "off" }).ok, up({ token: "bad" }).ok], [false, false]);
