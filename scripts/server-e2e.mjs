@@ -45,17 +45,20 @@ function makeDrive() {
 
 // ---- Apps Script stubs ----
 const logs = [];
+let fetchCount = 0;
+const props = new Map([["FIREBASE_PROJECT_ID", PROJECT]]);
 const sandbox = {
   console,
   Logger: { log: (m) => logs.push(String(m)) },
   UrlFetchApp: {
     fetch: (url, o) => {
+      fetchCount++;
       const r = http(o.method ?? "get", url.replace("https://firestore.googleapis.com/v1/projects/" + PROJECT, `http://${HOST}/v1/projects/${PROJECT}`), o.payload);
       return { getResponseCode: () => r.code, getContentText: () => r.text };
     },
   },
   ScriptApp: { getOAuthToken: () => "owner" },
-  PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => (k === "FIREBASE_PROJECT_ID" ? PROJECT : null) }) },
+  PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => props.get(k) ?? null, setProperty: (k, v) => props.set(k, String(v)) }) },
   LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock: () => {} }) },
   Utilities: {
     formatDate: (d) => d.toISOString().replace(/[-:]/g, "").slice(0, 15),
@@ -199,7 +202,7 @@ put("users/old@bpmc", { active: false, role: "site", projectIds: ["KSK"] });
 put("projects/KSK/photos/PH9", P({ businessDate: today, refCol: "workEntries", refId: "K1", driveFileId: "file_x", mime: "image/jpeg", label: "Footing" }));
 
 // ---- chalao ----
-S.runHisab();
+S.runHisab(true);
 
 // ---- jaancho ----
 const get = (path) => S.getDoc_(path);
@@ -290,7 +293,7 @@ expect("DPR action DONE", get("projects/KSK/dprActions/D1").data.serverStatus, "
 put("projects/KSK/storeMoves/S9", P({ rev: 2, businessDate: today, type: "TRANSFER_OUT", itemId: "pipe", qty: 5, otherProjectId: "DNT", deleted: { by: "munshi@bpmc", reason: "galat site" } }));
 put("projects/KSK/storeMoves/S1", P({ rev: 2, businessDate: dAgo(10), type: "INWARD", itemId: "rcm", qty: 1, ratePaise: 1500000, gstPct: 18, payMode: "UDHAAR", partyId: "sharma" }));
 put("projects/KSK/storeMoves/S6", P({ rev: 2, businessDate: dAgo(1), type: "RETURN", itemId: "sheet", qty: 2, contractorId: "suraj", condition: "BROKEN", recoveryPaise: 0 }));
-S.runHisab();
+S.runHisab(true);
 expect("Edit: transfer hataya → Dantewada ka TRANSFER_IN bhi hata, stock 0", [!!get("projects/DNT/storeMoves/tr_KSK_S9")?.data?.deleted, get("projects/DNT/storeSummary/current")?.data?.items?.pipe], [true, undefined]);
 expect("Edit: Keshkal GI pipe wapas 22 (alert hata)", [get("projects/KSK/storeSummary/current")?.data?.items?.pipe?.inStore, get("projects/KSK/storeSummary/current")?.data?.alerts?.map((a) => a.kind)], [22, ["NOT_RETURNED"]]);
 expect("Edit: Rod cutter 1 → RCM-02 CANCELLED, RCM-01 bana raha", S.listDocs_("projects/KSK/storeAssets").map((d) => [d.id, d.data.status]), [["RCM-01", "ACTIVE"], ["RCM-02", "CANCELLED"]]);
@@ -298,7 +301,7 @@ expect("Edit: udhaar bill ₹17,700 (1 × ₹15,000 + 18%), rev 2", [get("projec
 expect("Edit: katauti 0 ki → khate se hati", !!get("projects/KSK/ledger/sr_S6")?.data?.deleted, true);
 expect("DPR edit: locked din badla → v2; v1 purana safe (transfer usme hai, v2 mein nahi)", [dprOf("KSK", today)?.version, get(`projects/KSK/dpr/${today}/versions/v1`)?.data?.snapshot?.store?.some((r) => r.type === "TRANSFER_OUT"), get(`projects/KSK/dpr/${today}/versions/v2`)?.data?.snapshot?.store?.some((r) => r.type === "TRANSFER_OUT")], [2, true, false]);
 expect("DPR edit: naya version ki file v2 naam se, purani nahi badli", !!fileAt(today + " DPR v2.md"), true);
-S.runHisab();
+S.runHisab(true);
 expect("DPR: kuch nahi badla → version nahi badhta", dprOf("KSK", today)?.version, 2);
 
 const ls = get("projects/KSK/ledgerSummary/current")?.data;
@@ -309,7 +312,7 @@ expect("Creditors: Sharma (store udhaar, edit ke baad) ₹17,700, overdue nahi",
 expect("Creditors: Suraj ki katauti hati → list mein nahi", ls?.parties?.suraj, undefined);
 expect("Creditors: kul bakaya / overdue", [ls?.totals?.bakayaPaise, ls?.totals?.overduePaise, ls?.asOf], [5870000 + 1770000, 500000, today]);
 put("projects/KSK/ledger/LR1", P({ businessDate: today, type: "RECOVERY", partyId: "suraj", amountPaise: 90000 }));
-S.runHisab();
+S.runHisab(true);
 const ls2 = get("projects/KSK/ledgerSummary/current")?.data;
 expect("Creditors: dena (bakaya) aur lena (thekedar se) alag — mila ke nahi", [ls2?.totals?.bakayaPaise, ls2?.totals?.toRecoverPaise], [5870000 + 1770000, 90000]);
 expect("Manual bill / payment DONE", ["ledger/LB1", "ledger/LP1"].map((x) => get(`projects/KSK/${x}`).data.serverStatus), ["DONE", "DONE"]);
@@ -326,7 +329,7 @@ expect("Work entries DONE", ["K1", "K3", "K5"].map((k) => get(`projects/KDG/work
 // rate badla (rev 2) → bill badla; entry hati → bill hata
 put("projects/KDG/workEntries/K1", KP({ rev: 2, businessDate: today, type: "CONCRETE", contractorId: "suraj", contractorName: "Suraj", qty: 120.5, unit: "M³", ratePaise: 700000 }));
 put("projects/KDG/workEntries/K2", KP({ rev: 2, businessDate: today, type: "SHUTTERING", contractorId: "suraj", qty: 72, unit: "Sq M", ratePaise: 35000, deleted: { by: "x", reason: "galat" } }));
-S.runHisab();
+S.runHisab(true);
 expect("Work edit: rate ₹7,000 → bill ₹8,43,500; hataayi shuttering ka bill hata", [get("projects/KDG/ledger/wk_K1")?.data?.amountPaise, !!get("projects/KDG/ledger/wk_K2")?.data?.deleted, get(`projects/KDG/days/${today}`)?.data?.work?.byContractor?.suraj?.amountPaise], [84350000, true, 84350000]);
 
 // ---- Machine bill → malik ka khata ----
@@ -340,21 +343,21 @@ expect("Machine bill: malik link nahi → khate mein kuch nahi", get(`projects/K
 const mp = get("projects/KDG/ledgerSummary/current")?.data?.parties?.mahavir;
 expect("Machine bill: Mahavir ka bakaya ₹8,000 − ₹1,000 = ₹7,000, abhi overdue nahi (credit 15 din)", [mp?.name, mp?.billPaise, mp?.lessPaise, mp?.bakayaPaise, mp?.overduePaise], ["Mahavir Excavators", 800000, 100000, 700000, 0]);
 put("projects/KDG/machineDeductions/JD1", KP({ rev: 2, businessDate: today, machineId: "jcb1", kind: "DRIVER_ADVANCE", amountPaise: 300000 }));
-S.runHisab();
+S.runHisab(true);
 expect("Machine bill edit: advance ₹3,000 → debit note ₹3,000, bakaya ₹5,000; ek hi entry (dobara nahi banti)", [get(`projects/KDG/ledger/md_jcb1_${mmonth}`)?.data?.amountPaise, get(`projects/KDG/ledger/md_jcb1_${mmonth}`)?.data?.rev, get("projects/KDG/ledgerSummary/current")?.data?.parties?.mahavir?.bakayaPaise], [300000, 2, 500000]);
 put("projects/KDG/machineLogs/J1", KP({ rev: 2, businessDate: today, machineId: "jcb1", status: "FULL", sr: 100, cr: 108, dieselLtr: 0, deleted: { by: "x", reason: "galat din" } }));
-S.runHisab();
+S.runHisab(true);
 expect("Machine bill: log hata → rental ₹0, BILL khate se hata; advance baaki (malik se lena)", [!!get(`projects/KDG/ledger/mb_jcb1_${mmonth}`)?.data?.deleted, get("projects/KDG/ledgerSummary/current")?.data?.parties?.mahavir?.bakayaPaise], [true, -300000]);
 
 // Malik baad mein joda (koi nayi machine entry nahi): din badalne par bill khate mein aa jaaye
 put("masters_machines/jcb2", { name: "Tipper 9", kind: "RENTAL", rateType: "DAY", ratePaise: 500000, ownerPartyId: "mahavir", deleted: null });
 put("projects/KDG/ledgerSummary/current", { asOf: yday, parties: {}, totals: {} });
-S.runHisab();
+S.runHisab(true);
 expect("Machine bill: malik baad mein joda → agle din ke sync mein bill khate mein", [get(`projects/KDG/ledger/mb_jcb2_${mmonth}`)?.data?.partyId, get(`projects/KDG/ledger/mb_jcb2_${mmonth}`)?.data?.amountPaise], ["mahavir", 500000]);
 // Jis site par ledger summary bana hi nahi (sirf purana machine bill hai)
 put("projects/NEWS", { name: "New Site", vault: "NEW" });
 put(`projects/NEWS/machineBills/jcb1_${mmonth}`, { month: mmonth, machineName: "JCB 3DX", rentalPaise: 100000, deductionPaise: 0, error: null });
-S.runHisab();
+S.runHisab(true);
 expect("Machine bill: summary na ho tab bhi sync + summary ban jaaye", [get(`projects/NEWS/ledger/mb_jcb1_${mmonth}`)?.data?.amountPaise, get("projects/NEWS/ledgerSummary/current")?.data?.parties?.mahavir?.bakayaPaise, get("projects/NEWS/ledgerSummary/current")?.data?.asOf], [100000, 100000, today]);
 
 // ---- Thekedar ka khata: company ne labour ko diya → bill se kata ----
@@ -363,14 +366,14 @@ expect("Thekedar: Raju (We pay + kaato = Yes) ki labour ko diya ₹5,000 uske kh
 expect("Thekedar: kaato = No, Contractor pays, Company labour, hataayi entry → kuch nahi", ["P2", "P3", "P4", "P5"].map((k) => get(`projects/KDG/ledger/lp_${k}`)), [null, null, null, null]);
 expect("Thekedar: Raju ka baaki = kaam ₹10,000 − labour ₹5,000 = ₹5,000", get("projects/KDG/ledgerSummary/current")?.data?.parties?.raju?.bakayaPaise, 500000);
 put("projects/KDG/labourPassbook/P1", KP({ rev: 2, businessDate: today, labourId: "LR", kind: "ADVANCE", amountPaise: 600000, mode: "CASH" }));
-S.runHisab();
+S.runHisab(true);
 expect("Thekedar edit: ₹6,000 → khata bhi ₹6,000; baaki ₹4,000", [get("projects/KDG/ledger/lp_P1")?.data?.amountPaise, get("projects/KDG/ledger/lp_P1")?.data?.rev, get("projects/KDG/ledgerSummary/current")?.data?.parties?.raju?.bakayaPaise], [600000, 2, 400000]);
 put("projects/KDG/ledgerSummary/current", { asOf: yday, parties: {}, totals: {} });
-S.runHisab();
+S.runHisab(true);
 expect("Thekedar: roz ke sync mein bina badlav rev nahi badhta", get("projects/KDG/ledger/lp_P1")?.data?.rev, 2);
 put("masters_contractors/raju", { name: "Raju", labourPaidBy: "US", deductLabour: "NO", deleted: null });
 put("projects/KDG/ledgerSummary/current", { asOf: yday, parties: {}, totals: {} });
-S.runHisab();
+S.runHisab(true);
 expect("Thekedar: Master mein kaato = No kiya → labour wali entry khate se hati, baaki ₹10,000", [!!get("projects/KDG/ledger/lp_P1")?.data?.deleted, get("projects/KDG/ledgerSummary/current")?.data?.parties?.raju?.bakayaPaise], [true, 1000000]);
 
 // ---- Photos: Drive upload (doPost) ----
@@ -390,14 +393,14 @@ put("projects/KSK/photos/PH1", P({ businessDate: today, refCol: "workEntries", r
 const gt = getP({ token: "good", fileId: good.fileId });
 expect("Photo: member apni site ki photo dekh sake (base64)", [gt.ok, gt.data, gt.mime], [true, jpg, "image/jpeg"]);
 expect("Photo: entry mein na likhi hui Drive file nahi dikhti; dusre project ka user nahi", [getP({ token: "good", fileId: "file_1" }).ok === true && !S.DriveApp._files.has("file_1"), getP({ token: "out", fileId: good.fileId }).ok], [false, false]);
-S.runHisab();
+S.runHisab(true);
 expect("Photo entries DONE (server ne dekh liya)", ["PH9", "PH1"].map((k) => get(`projects/KSK/photos/${k}`).data.serverStatus), ["DONE", "DONE"]);
 
 // DPR: purane din ka diesel badla → aage ke locked din bhi naya version (CLAUDE.md Point 1)
 {
   const vBefore = dprOf("KSK", today)?.version;
   put("projects/KSK/stockMoves/d1", P({ rev: 2, businessDate: yday, itemId: "diesel", type: "IN", qty: 250, payMode: "NAKAD" }));
-  S.runHisab();
+  S.runHisab(true);
   expect("DPR cascade: kal ka diesel 246 → 250, aaj ki DPR ka opening 250 + naya version", [dprOf("KSK", today)?.snapshot?.diesel?.opening, dprOf("KSK", today)?.version], [250, vBefore + 1]);
 }
 
@@ -411,7 +414,7 @@ expect("Photo entries DONE (server ne dekh liya)", ["PH9", "PH1"].map((k) => get
   put("backupRuns/old", { at: vm.runInContext(`new Date(${Date.now() - 3 * 86400000})`, sandbox), ok: true });
   put("backupRuns/older", { at: vm.runInContext(`new Date(${Date.now() - 9 * 86400000})`, sandbox), ok: true });
   put("projects/KSK/machineLogs/L3", P({ rev: 2, businessDate: today, machineId: "poc200", status: "BREAKDOWN", dieselLtr: 0, breakdownFrom: "10:30", breakdownReason: "Hydraulic pipe" }));
-  S.runHisab();
+  S.runHisab(true);
   const keys = ak("KSK");
   {
     const items = get("projects/KSK/alerts/current")?.data?.items ?? [];
@@ -424,12 +427,12 @@ expect("Photo entries DONE (server ne dekh liya)", ["PH9", "PH1"].map((k) => get
 
   // Dobara chala (kuch nahi badla, ghante ke andar) → koi naya notification nahi
   const refreshed = get("projects/KSK/alerts/current")?.data?.refreshedAt;
-  S.runHisab();
+  S.runHisab(true);
   expect("Notification: kuch nahi badla → dobara nahi, alerts bhi dobara nahi bane", [notifs("KSK", "BREAKDOWN:poc200").length, String(get("projects/KSK/alerts/current")?.data?.refreshedAt)], [1, String(refreshed)]);
 
   // Machine theek ho gayi → alert gaya, notification par resolvedAt
   put("projects/KSK/machineLogs/L3", P({ rev: 3, businessDate: today, machineId: "poc200", status: "BREAKDOWN", dieselLtr: 0, breakdownFrom: "10:30", breakdownTo: "15:00", breakdownReason: "Hydraulic pipe" }));
-  S.runHisab();
+  S.runHisab(true);
   expect("Breakdown theek → alert hata, notification 'resolved'", [ak("KSK").includes("BREAKDOWN:poc200"), !!notifs("KSK", "BREAKDOWN:poc200")[0]?.data?.resolvedAt], [false, true]);
 
   // DPR: Dantewada mein kal ki Draft → yaad dilana (info)
@@ -441,14 +444,43 @@ expect("Photo entries DONE (server ne dekh liya)", ["PH9", "PH1"].map((k) => get
   const snap5 = B.buildDpr({ date: d5, projectName: "EMRS Dantewada", day: {}, materials: {}, machines: {}, contractors: {}, machineLogs: [], workEntries: [], storeMoves: [], creditors: null, photos: [] });
   put(`projects/DNT/dpr/${d5}`, { date: d5, status: "DRAFT", version: 0, snapshot: snap5, fp: B.dprFingerprint(snap5) });
   put("projects/DNT/alerts/current", { asOf: "2000-01-01", items: [] }); // purana → dobara banao
-  S.runHisab();
+  S.runHisab(true);
   expect("DPR alert: kal ki Draft lock nahi → info alert, DPR page ka link", get("projects/DNT/alerts/current")?.data?.items?.find((a) => a.key === `DPR:${d1}`)?.link, `/dpr?date=${d1}`);
   const autoMd = () => [...S.DriveApp._files.values()].filter((x) => x.path.includes("EMRS DANTEWADA NBCC/Daily Report") && x.name.startsWith(d5 + " DPR") && x.name.endsWith(".md"));
   expect("Bina lock wali DPR: window band → md + json + pdf, 'Not approved' likha", [autoMd().length, autoMd()[0]?.blob.getDataAsString().includes("Not approved / अनुमोदित नहीं"), [...S.DriveApp._files.values()].some((x) => x.name === d5 + " DPR.pdf"), !!get(`projects/DNT/dpr/${d5}`)?.data?.autoFiledFp], [1, true, true, true]);
   expect("Bina lock wali DPR: Draft hi rahi (version nahi bana)", [get(`projects/DNT/dpr/${d5}`)?.data?.status, get(`projects/DNT/dpr/${d5}/versions/v1`)], ["DRAFT", null]);
   put("projects/DNT/alerts/current", { asOf: "2000-01-01", items: [] });
-  S.runHisab();
+  S.runHisab(true);
   expect("Bina lock wali DPR: dobara chala → file dobara nahi", autoMd().length, 1);
+}
+
+// ---- Quota bachao: bina badlav ke run sirf ek sasta sawaal (Apps Script urlfetch roz ~20,000) ----
+{
+  S.runHisab(true); // poora run → gate ka nishaan (kab, kaunsa din, aakhri audit)
+  fetchCount = 0;
+  S.runHisab();
+  expect("Gate: koi nayi entry nahi, din wahi, ghanta nahi hua → sirf 1 call", fetchCount, 1);
+  // Nayi entry (audit ke saath, jaise phone likhta hai) → poora hisab
+  put("projects/KSK/stockMoves/g1", P({ businessDate: today, itemId: "diesel", type: "USE", qty: 1, lastAuditId: "ga1" }));
+  put("projects/KSK/auditLog/ga1", { entity: "stockMoves/g1", action: "CREATE", rev: 1, by: "munshi@bpmc", at: vm.runInContext("new Date()", sandbox) });
+  fetchCount = 0;
+  S.runHisab();
+  expect("Gate: nayi entry → poora hisab chala, entry DONE", [fetchCount > 10, get("projects/KSK/stockMoves/g1")?.data?.serverStatus], [true, "DONE"]);
+  // Us run ne kaam kiya → agla run bhi poora (server ki banayi PENDING entry na chhoote), phir shaant
+  S.runHisab();
+  fetchCount = 0;
+  S.runHisab();
+  expect("Gate: kaam khatam → phir se sirf 1 call", fetchCount, 1);
+  // Master badla (global auditLog) → poora
+  put("auditLog/gm1", { entity: "masters_materials/cement", action: "UPDATE", rev: 2, by: "admin@bpmc", at: vm.runInContext("new Date()", sandbox) });
+  fetchCount = 0;
+  S.runHisab();
+  expect("Gate: master badla → poora hisab", fetchCount > 10, true);
+  // Din badla (gate mein purana din) → poora
+  props.set("HISAB_GATE", JSON.stringify({ ...JSON.parse(props.get("HISAB_GATE")), date: "2000-01-01" }));
+  fetchCount = 0;
+  S.runHisab();
+  expect("Gate: din badla → poora hisab", fetchCount > 10, true);
 }
 
 console.log(fails ? `\n${fails} jaanch FAIL` : "\nSab server jaanch pass");

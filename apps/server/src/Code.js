@@ -117,13 +117,18 @@ function fullName_(path) {
  * opening / aaya / kharch / closing dobara (BPMCCore.buildStockLedger) → days/{date}.stock likho
  * → entry par serverStatus = DONE (sirf agar beech mein phone ne dobara na badla ho).
  */
-function runHisab() {
+function runHisab(force) {
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(5000)) return;
   var started = new Date();
   var log = { projects: {}, error: null };
+  var gate = null;
+  var didEntries = false;
   try {
     var today = BPMCCore.toBusinessDateIST(started);
+    // Quota bachao: koi nayi entry nahi, din wahi, ghanta nahi hua → yahin ruko (trigger event object deta hai, isliye === true)
+    gate = hisabGate_(started, today);
+    if (force !== true && !gate.need) return;
     var materialIds = listDocs_('masters_materials')
       .filter(function (m) { return !m.data.deleted; })
       .map(function (m) { return m.id; });
@@ -165,6 +170,7 @@ function runHisab() {
       if (pLedger.length || pStock.length || pStore.length || pWork.length || pLabPass.length || !lsum || lsum.data.asOf !== today) ledgerDirty[p.id] = 1;
       var all = pStock.concat(pLogs, pDeds, pMuster, pStaff, pPass, pLabAtt, pLabPass, pStore, pServ, pLedger, pWork, pPhotos, pDpr);
       if (!all.length) return;
+      didEntries = true;
       var dd = markDprDate_(dprDirty, p.id, null);
       dd.actions = dd.actions.concat(pDpr);
       dd.pending = dd.pending.concat(all);
@@ -214,6 +220,8 @@ function runHisab() {
       var r = hisabAlerts_('projects/' + pid, pid, !!log.projects[pid], ctx);
       if (r) (log.projects[pid] = log.projects[pid] || {}).alerts = r;
     });
+    // Poora run theek chala → gate ka nishaan. Kaam hua to agla run bhi poora (server ki banayi PENDING entry na chhoote)
+    saveHisabGate_({ seenAt: gate.latest ? gate.latest.toISOString() : gate.g.seenAt || null, date: today, fullAt: started.toISOString(), force: didEntries });
   } catch (e) {
     log.error = String(e && e.message || e);
     throw e;
@@ -228,6 +236,36 @@ function runHisab() {
       lock.releaseLock();
     }
   }
+}
+
+// ---------------- Quota gate ----------------
+// Apps Script mein ek Google account ke saare script mila ke roz ~20,000 urlfetch. Har 5 min poora hisab (har project ki
+// 14 collection) isse paar kar jaata tha. Ab: pehle ek sawaal — pichhle poore run ke baad koi naya audit (har entry / master
+// badlav ke saath audit banta hai)? Nahi, din wahi, aur ghanta nahi hua → kuch nahi. Sawaal hi fail ho → poora (hisab kabhi nahi rukta).
+var HISAB_GATE_PROP = 'HISAB_GATE';
+var HISAB_FULL_EVERY_MS = 60 * 60 * 1000;
+
+function hisabGate_(started, today) {
+  var props = PropertiesService.getScriptProperties();
+  var g = {};
+  try { g = JSON.parse(props.getProperty(HISAB_GATE_PROP) || '{}') || {}; } catch (e) { g = {}; }
+  var latest = null;
+  try {
+    var sq = { from: [{ collectionId: 'auditLog', allDescendants: true }], orderBy: [{ field: { fieldPath: 'at' }, direction: 'DESCENDING' }], limit: 1 };
+    if (g.seenAt) sq.where = { fieldFilter: { field: { fieldPath: 'at' }, op: 'GREATER_THAN', value: { timestampValue: g.seenAt } } };
+    var r = fsCall_('post', ':runQuery', { structuredQuery: sq }) || [];
+    var d = r.filter(function (x) { return x.document; }).map(function (x) { return docOf_(x.document); })[0];
+    latest = d && d.data.at instanceof Date ? d.data.at : null;
+  } catch (e) {
+    return { need: true, g: g, latest: null };
+  }
+  var changed = !!latest && (!g.seenAt || latest > new Date(g.seenAt));
+  var stale = !g.fullAt || (started - new Date(g.fullAt)) >= HISAB_FULL_EVERY_MS;
+  return { need: changed || !!g.force || g.date !== today || stale, g: g, latest: latest };
+}
+
+function saveHisabGate_(g) {
+  PropertiesService.getScriptProperties().setProperty(HISAB_GATE_PROP, JSON.stringify(g));
 }
 
 /** Entry par DONE — sirf agar server ke padhne ke baad phone ne dobara na badla ho */
