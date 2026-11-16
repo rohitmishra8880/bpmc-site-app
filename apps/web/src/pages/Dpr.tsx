@@ -1,7 +1,8 @@
 // DPR: server ka banaya snapshot dikhana, lock (digital approval), versions, PDF, WhatsApp. Phone yahan koi hisab nahi karta.
 import { collection, doc, onSnapshot, type DocumentData } from "firebase/firestore";
 import { useEffect, useMemo, useState } from "react";
-import { canEditDate, DPR_EMPTY_TEXT, dprSections, dprWhatsapp, formatDate, toBusinessDateIST, type DprMeta, type DprSnapshot } from "@bpmc/core";
+import { useSearchParams } from "react-router-dom";
+import { canEditDate, DPR_EMPTY_TEXT, dprSections, dprWhatsapp, formatDate, isBusinessDate, toBusinessDateIST, type DprMeta, type DprSnapshot } from "@bpmc/core";
 import { DateBar } from "../components/DateBar";
 import { can, useProfile } from "../lib/auth";
 import { useDayEntries, useUnlock, writeEntries } from "../lib/entries";
@@ -25,7 +26,13 @@ export function Dpr() {
   const profile = useProfile();
   const toast = useToast();
   const { current } = useProjects();
-  const [date, setDate] = useState(() => toBusinessDateIST(new Date()));
+  const [params] = useSearchParams();
+  // Alert se aaye (/dpr?date=…) to wahi din khule
+  const [date, setDate] = useState(() => {
+    const q = params.get("date");
+    const today = toBusinessDateIST(new Date());
+    return q && isBusinessDate(q) && q <= today ? q : today;
+  });
   const [dpr, setDpr] = useState<DocumentData | null | undefined>(undefined);
   const [versions, setVersions] = useState<Version[]>([]);
   const [pick, setPick] = useState<number | null>(null);
@@ -91,6 +98,7 @@ export function Dpr() {
         <DateBar title="Daily Report (DPR)" sub={`${current.name} — made only from real entries`} date={date} onChange={setDate} unlockedTill={unlock} />
         <PageHead title={period} sub={locked ? `Locked by ${dpr?.lockedBy} · ${dpr?.lockedAt}` : "Draft — check it, then lock it to approve"}>
           {locked ? <span className="pill ok">🔒 Locked · v{dpr?.version}</span> : dpr ? <span className="pill warn">Draft</span> : null}
+          {!locked && dpr?.autoFiled && <span className="pill info" title="The edit window closed without locking, so the server saved this draft to the Obsidian vault marked Not approved">📁 Saved to Obsidian · not approved</span>}
           {pending && <span className="pill warn">⏳ Server is working (up to 5 min)</span>}
           {snapshot && <button className="btn primary" onClick={() => downloadPdf(current.name, `DPR ${meta.version ? `v${meta.version}` : "Draft"}`, period, true)}>⬇ PDF / Print</button>}
           {snapshot && <button className="btn" onClick={share}>WhatsApp</button>}

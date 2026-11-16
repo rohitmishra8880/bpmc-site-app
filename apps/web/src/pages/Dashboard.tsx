@@ -1,10 +1,10 @@
 import { doc, onSnapshot } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { formatDate, formatHours, formatQty, formatQtyShort, toBusinessDateIST, type DayItemBalance, type StoreAlert, type WorkTotals, type WorkType } from "@bpmc/core";
+import { formatDate, formatHours, formatQty, formatQtyShort, toBusinessDateIST, type DayItemBalance, type WorkTotals, type WorkType } from "@bpmc/core";
+import { KIND_IC, SEV_PILL, useAlerts } from "../lib/alerts";
 import { useProfile } from "../lib/auth";
 import { db } from "../lib/firebase";
-import { useMaster } from "../lib/masters";
 import { useProjects } from "../lib/projects";
 import { PageHead } from "../lib/ui";
 
@@ -25,21 +25,14 @@ export function Dashboard() {
   const { current, loading } = useProjects();
   const today = toBusinessDateIST(new Date());
   const [day, setDay] = useState<DayDoc | null>(null);
-  const [store, setStore] = useState<{ alerts?: StoreAlert[] } | null>(null);
-  const storeItems = useMaster("masters_storeItems");
-  const contractors = useMaster("masters_contractors");
+  // Alerts: server ki ek hi list (alerts/current) — ghanti aur Alerts page bhi yahi padhte hain
+  const { items: alerts } = useAlerts(current?.id);
 
   useEffect(() => {
     if (!current) return;
     setDay(null);
-    setStore(null);
-    // Numbers only from the server calculation (days/, storeSummary/) — the phone never adds them up
-    const a = onSnapshot(doc(db, "projects", current.id, "days", today), (s) => setDay((s.data() as DayDoc) ?? {}));
-    const b = onSnapshot(doc(db, "projects", current.id, "storeSummary", "current"), (s) => setStore(s.data() ?? {}));
-    return () => {
-      a();
-      b();
-    };
+    // Numbers only from the server calculation (days/) — the phone never adds them up
+    return onSnapshot(doc(db, "projects", current.id, "days", today), (s) => setDay((s.data() as DayDoc) ?? {}));
   }, [current, today]);
 
   if (loading) return <p className="muted">Loading…</p>;
@@ -57,9 +50,6 @@ export function Dashboard() {
   const staffToday = day?.staff ? day.staff.present + day.staff.halfDay : 0;
   const lt = day?.labour?.totals;
   const hasAtt = !!(day?.labour || day?.staff);
-  const iName = (id: string) => storeItems.find((i) => i.id === id)?.name ?? id;
-  const cName = (id: string) => (id === "COMPANY" ? "Company (own labour)" : (contractors.find((c) => c.id === id)?.name ?? id));
-  const storeAlerts = store?.alerts ?? [];
   const workParts = WORK_ORDER.flatMap(([k, label]) => (day?.work?.byType?.[k] ? [{ label, qty: day.work.byType[k]!.qty, unit: day.work.byType[k]!.unit }] : []));
 
   return (
@@ -114,27 +104,24 @@ export function Dashboard() {
         </Link>
       </div>
 
-      {(storeAlerts.length > 0 || !!mt?.breakdown) && (
-        <section className="card alerts-card" style={{ borderColor: "var(--crit)" }}>
+      {alerts.length > 0 && (
+        <section className="card alerts-card" style={{ borderColor: alerts.some((a) => a.severity === "crit") ? "var(--crit)" : "var(--warn)" }}>
           <div className="card-head">
             <h2>⚠️ Critical alerts</h2>
-            <span className="pill crit">{storeAlerts.length + (mt?.breakdown ? 1 : 0)} active</span>
+            <Link className={`pill ${alerts.some((a) => a.severity === "crit") ? "crit" : "warn"}`} to="/alerts">{alerts.length} active →</Link>
           </div>
-          {!!mt?.breakdown && (
-            <Link className="row" to="/machinery">
-              🔧 <span><b>{mt.breakdown}</b> machine{mt.breakdown > 1 ? "s" : ""} in breakdown today</span>
-            </Link>
-          )}
-          {storeAlerts.map((a, i) => (
-            <Link key={i} className="row" to="/store">
-              🧰
-              {a.kind === "LOW_STOCK" ? (
-                <span><b>{iName(a.itemId)}</b>: only {formatQtyShort(a.qty)} left (limit {formatQtyShort(a.limit)})</span>
-              ) : (
-                <span><b>{cName(a.contractorId)}</b>: {iName(a.itemId)} × {formatQtyShort(a.qty)} — not returned for {a.days} days</span>
-              )}
+          {alerts.slice(0, 6).map((a) => (
+            <Link key={a.key} className="row" to={a.link}>
+              {KIND_IC[a.kind]}
+              <span style={{ flex: 1 }}>{a.text}</span>
+              <span className={`pill ${SEV_PILL[a.severity]}`}>{a.title}</span>
             </Link>
           ))}
+          {alerts.length > 6 && (
+            <Link className="row" to="/alerts">
+              … and {alerts.length - 6} more — see all alerts
+            </Link>
+          )}
         </section>
       )}
 
@@ -146,6 +133,7 @@ export function Dashboard() {
         <Mod tone="t-indigo" to="/machinery" ic="🔧" title="Machinery" sub="SR / CR, diesel, breakdowns" />
         <Mod tone="t-gold" to="/creditors" ic="📒" title="Creditors" sub="Bills, payments, bakaya" />
         <Mod tone="t-violet" to="/dpr" ic="📝" title="Daily Report (DPR)" sub="Lock, PDF, WhatsApp" />
+        <Mod tone="t-coral" to="/alerts" ic="🔔" title="Alerts" sub="Breakdown, low stock, overdue" />
         <Mod tone="t-slate" to="/reports" ic="📄" title="Reports & PDF" sub="Every hisab as a PDF" />
       </div>
       <p className="small muted">

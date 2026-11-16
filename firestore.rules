@@ -292,6 +292,23 @@ service cloud.firestore {
         allow read: if member(pid);
         allow write: if false;
       }
+      // Alerts + notifications — sirf server likhta hai (koi fake message nahi), member padhe
+      match /alerts/{id} {
+        allow read: if member(pid);
+        allow write: if false;
+      }
+      match /notifications/{id} {
+        allow read: if member(pid);
+        allow write: if false;
+      }
+      // Ghanti: har user ne aakhri baar kab dekha — sirf apna, sirf seenAt (abhi ka samay)
+      match /notifSeen/{userEmail} {
+        allow read: if member(pid) && userEmail == email();
+        allow create, update: if member(pid) && userEmail == email()
+          && request.resource.data.keys().hasOnly(['seenAt'])
+          && request.resource.data.seenAt == request.time;
+        allow delete: if false;
+      }
       match /serverRuns/{id} {
         allow read: if isAdmin();
         allow write: if false;

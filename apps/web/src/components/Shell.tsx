@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { formatDate, toBusinessDateIST } from "@bpmc/core";
+import { KIND_IC, SEV_PILL, useNotifications, whenText } from "../lib/alerts";
 import { can, logout, useProfile } from "../lib/auth";
 import { APP_ENV } from "../lib/firebase";
 import { useProjects } from "../lib/projects";
@@ -30,6 +31,7 @@ const NAV: { group: string | null; items: NavItem[] }[] = [
       { to: "/work", ic: "📅", label: "Daily Work" },
       { to: "/creditors", ic: "📒", label: "Creditors / Party Ledger" },
       { to: "/dpr", ic: "📝", label: "Daily Report (DPR)" },
+      { to: "/alerts", ic: "🔔", label: "Alerts & Notifications" },
       { to: "/reports", ic: "📄", label: "Reports & PDF" },
     ],
   },
@@ -62,7 +64,13 @@ export function Shell() {
   const loc = useLocation();
   const [online, setOnline] = useState(navigator.onLine);
 
-  useEffect(() => setOpen(false), [loc.pathname]);
+  const [bellOpen, setBellOpen] = useState(false);
+  const notif = useNotifications(current?.id);
+
+  useEffect(() => {
+    setOpen(false);
+    setBellOpen(false);
+  }, [loc.pathname]);
   useEffect(() => {
     const on = () => setOnline(true);
     const off = () => setOnline(false);
@@ -119,6 +127,20 @@ export function Shell() {
             {online ? "Online" : "Offline — entries saved on phone"}
           </span>
           <span className="when">{formatDate(toBusinessDateIST(new Date()))}</span>
+          <button
+            className="icon bell"
+            onClick={() => {
+              const was = notif.unread;
+              setBellOpen((o) => !o);
+              // Kholte hi "dekh liya" — number tab hi ghatega jab sach mein dekha
+              if (!bellOpen && was > 0) void notif.markSeen();
+            }}
+            aria-label={notif.unread ? `Notifications: ${notif.unread} new` : "Notifications"}
+            aria-expanded={bellOpen}
+          >
+            🔔
+            {notif.unread > 0 && <span className="badge">{notif.unread > 99 ? "99+" : notif.unread}</span>}
+          </button>
           <button className="icon" onClick={cycleTheme} aria-label="Theme: light / dark / sunlight">
             ◐
           </button>
@@ -127,6 +149,7 @@ export function Shell() {
           </button>
         </div>
       </header>
+      {bellOpen && <BellPanel list={notif.list} seenAt={notif.seenAt} onClose={() => setBellOpen(false)} />}
       <div className="layout">
         <aside className={`side ${open ? "open" : ""}`} aria-label="Menu">
           <div className="proj-card">
@@ -181,6 +204,41 @@ export function Soon({ title, phase, what }: { title: string; phase: string; wha
           This section is coming in <b>{phase}</b>. The design is ready; data entry will be added next.
         </p>
       </div>
+    </>
+  );
+}
+
+/** Ghanti ka panel: pichhle notification (naye upar). Number aur list ek hi data se — "0 Active" wali galti nahi. */
+function BellPanel({ list, seenAt, onClose }: { list: ReturnType<typeof useNotifications>["list"]; seenAt: number | null; onClose: () => void }) {
+  // Panel khulte samay ka seenAt yaad — warna "dekh liya" likhte hi naye wale ka rang chala jaata
+  const [since] = useState(seenAt);
+  return (
+    <>
+      <div className="scrim" style={{ background: "transparent" }} onClick={onClose} />
+      <section className="card notif-pop" role="dialog" aria-label="Notifications">
+        <div className="card-head">
+          <h2>Notifications</h2>
+          <button className="icon" onClick={onClose} aria-label="Close">✕</button>
+        </div>
+        {list === undefined ? (
+          <div className="empty">Loading…</div>
+        ) : list.length === 0 ? (
+          <div className="empty">No notifications yet</div>
+        ) : (
+          list.slice(0, 12).map((n) => (
+            <Link key={n.id} className={`row ${since === null || (n.createdAt?.toMillis() ?? 0) > since ? "unread" : ""}`} to={n.link}>
+              <span aria-hidden="true">{KIND_IC[n.kind]}</span>
+              <span style={{ flex: 1 }}>
+                <b>{n.title}</b> <span className="small muted">· {whenText(n.createdAt)}</span>
+                <br />
+                <span className="small">{n.text}</span>
+              </span>
+              {n.resolvedAt ? <span className="pill ok">Resolved</span> : <span className={`pill ${SEV_PILL[n.severity]}`}>Open</span>}
+            </Link>
+          ))
+        )}
+        <Link className="foot" to="/alerts">See all alerts →</Link>
+      </section>
     </>
   );
 }

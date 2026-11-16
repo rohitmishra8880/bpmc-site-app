@@ -1,6 +1,6 @@
 // DPR (din ke end ki report): server ke hisab + asli entries → ek snapshot. Isi se app, PDF, Markdown, WhatsApp — sab ek hi data se.
 // Hisab yahan nahi hota: numbers days/ se aate hain, yeh sirf jodta aur sajata hai. Labels: English / हिंदी (Rohit ka niyam).
-import { formatDate, isBusinessDate } from "./date";
+import { canEditDate, formatDate, isBusinessDate } from "./date";
 import { formatINR, formatQtyShort, type Paise } from "./money";
 import { gpsLabel } from "./photo";
 
@@ -204,10 +204,18 @@ export interface DprMeta {
   lockedBy?: string | null;
   lockedAt?: string | null;
   note?: string | null;
+  /** Lock nahi hua, phir bhi file bani (edit window band hone par) — kyun */
+  notApproved?: string | null;
 }
 
 const title = (d: DprSnapshot) => `DPR — ${d.projectName} — ${formatDate(d.date)}`;
-const metaLines = (m: DprMeta) => [m.version ? `Version v${m.version}` : "Draft / मसौदा", m.lockedBy ? `Approved by / अनुमोदित: ${m.lockedBy}${m.lockedAt ? ` (${m.lockedAt})` : ""}` : "", m.note ? `Change / बदलाव: ${m.note}` : ""].filter(Boolean);
+const metaLines = (m: DprMeta) =>
+  [
+    m.version ? `Version v${m.version}` : "Draft / मसौदा",
+    m.lockedBy ? `Approved by / अनुमोदित: ${m.lockedBy}${m.lockedAt ? ` (${m.lockedAt})` : ""}` : "",
+    m.notApproved ? `Not approved / अनुमोदित नहीं: ${m.notApproved}` : "",
+    m.note ? `Change / बदलाव: ${m.note}` : "",
+  ].filter(Boolean);
 
 export function dprMarkdown(d: DprSnapshot, m: DprMeta): string {
   const parts = [`# ${title(d)}`, "", ...metaLines(m).map((l) => `${l}  `), ""];
@@ -247,4 +255,15 @@ export function dprWhatsapp(d: DprSnapshot, m: DprMeta): string {
   if (d.workTotals.length) lines.push(`Work: ${d.workTotals.map((x) => `${(WORK_NAME[x.type] ?? x.type).split(" / ")[0]} ${q(x.qty)} ${x.unit}`).join(", ")}`);
   if (d.store.length) lines.push(`Store: ${d.store.length} entries`);
   return lines.join("\n");
+}
+
+/**
+ * Jis din ki DPR lock nahi hui, uski file Obsidian mein khud: jab us din ka edit window band ho jaaye
+ * (aur Admin ne din khola na ho). Wahi data dobara file nahi hota; Admin ne khol ke badla to nayi file (" v2").
+ */
+export function dprAutoFileDates(drafts: { date: string; fp: string; autoFiledFp?: string | null }[], now: Date, unlocks: Record<string, Date>): string[] {
+  return drafts
+    .filter((d) => d.fp !== d.autoFiledFp && !canEditDate(d.date, now, unlocks[d.date] ? { expiresAt: unlocks[d.date]! } : null))
+    .map((d) => d.date)
+    .sort();
 }

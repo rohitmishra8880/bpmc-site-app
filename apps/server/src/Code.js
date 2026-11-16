@@ -132,9 +132,11 @@ function runHisab() {
     var storeDirty = {};
     var ledgerDirty = {};
     var dprDirty = {};
+    var pids = [];
 
     listDocs_('projects').forEach(function (p) {
       var parent = 'projects/' + p.id;
+      pids.push(p.id);
       var pStock = query_(parent, 'stockMoves', 'serverStatus', ENTRY_STATUS_PENDING);
       var pLogs = query_(parent, 'machineLogs', 'serverStatus', ENTRY_STATUS_PENDING);
       var pDeds = query_(parent, 'machineDeductions', 'serverStatus', ENTRY_STATUS_PENDING);
@@ -206,6 +208,11 @@ function runHisab() {
     // DPR sabse aakhir mein — upar ke saare hisab ke baad
     Object.keys(dprDirty).forEach(function (pid) {
       (log.projects[pid] = log.projects[pid] || {}).dpr = hisabDpr_('projects/' + pid, pid, dprDirty[pid], ctx);
+    });
+    // Alerts + notifications sabse aakhir mein — upar ke saare hisab ke baad (badlav par, nahi to ghante mein ek baar)
+    pids.forEach(function (pid) {
+      var r = hisabAlerts_('projects/' + pid, pid, !!log.projects[pid], ctx);
+      if (r) (log.projects[pid] = log.projects[pid] || {}).alerts = r;
     });
   } catch (e) {
     log.error = String(e && e.message || e);
@@ -685,7 +692,8 @@ function dprOneDate_(parent, pid, proj, date, dd, ledger, ctx) {
   var lockAct = dd.actions.filter(function (a) { return a.data.businessDate === date && a.data.action === 'LOCK' && !a.data.deleted; }).pop();
   var now = new Date();
   if (!locked && !lockAct) {
-    commit_([{ update: { name: fullName_(path), fields: encFields_({ date: date, status: 'DRAFT', version: 0, snapshot: snapshot, fp: fp, updatedAt: now }) } }]);
+    // Pehle khud file hui Draft ka nishaan na mite (warna wahi file dobara banti)
+    commit_([{ update: { name: fullName_(path), fields: encFields_({ date: date, status: 'DRAFT', version: 0, snapshot: snapshot, fp: fp, updatedAt: now, autoFiledFp: (cur && cur.data.autoFiledFp) || null, autoFiled: (cur && cur.data.autoFiled) || null }) } }]);
     return false;
   }
   if (locked && cur.data.fp === fp) return false;
@@ -739,10 +747,128 @@ function writeDprFiles_(proj, pid, date, snapshot, meta, ctx) {
   var folder = folderPath_(obsidianRoot_(), BPMCCore.dprFolder(vault, date));
   var base = date + ' DPR';
   var md = createNewFile_(folder, base, '.md', BPMCCore.dprMarkdown(snapshot, meta), MimeType.PLAIN_TEXT);
-  var json = createNewFile_(folder, base, '.json', JSON.stringify({ type: 'bpmc-dpr', date: date, version: meta.version, lockedBy: meta.lockedBy, lockedAt: meta.lockedAt, note: meta.note, snapshot: snapshot }, null, 1), MimeType.PLAIN_TEXT);
+  var json = createNewFile_(folder, base, '.json', JSON.stringify({ type: 'bpmc-dpr', date: date, version: meta.version || 0, lockedBy: meta.lockedBy || null, lockedAt: meta.lockedAt || null, note: meta.note || null, notApproved: meta.notApproved || null, snapshot: snapshot }, null, 1), MimeType.PLAIN_TEXT);
   var pdfName = uniqueName_(folder, base, '.pdf');
   var pdf = folder.createFile(Utilities.newBlob(BPMCCore.dprHtml(snapshot, meta, dprLogo_(ctx)), 'text/html', base + '.html').getAs('application/pdf').setName(pdfName));
   return { md: md.getId(), json: json.getId(), pdf: pdf.getId(), name: pdfName };
+}
+
+// ---------------- Alerts + notifications (Phase 3) ----------------
+// Ek hi list (alerts/current) → Dashboard, header ki ghanti, Alerts page. Naya alert → notifications/ mein ek record;
+// alert khatam → us record par resolvedAt. Free plan ki read limit ke liye: badlav par, nahi to ghante mein ek baar.
+var ALERT_REFRESH_MS = 60 * 60 * 1000;
+
+function loadMasters_(ctx) {
+  if (!ctx.machines) {
+    ctx.machines = {};
+    listDocs_('masters_machines').forEach(function (m) { ctx.machines[m.id] = m.data; });
+  }
+  if (!ctx.materials) {
+    ctx.materials = {};
+    listDocs_('masters_materials').forEach(function (m) { ctx.materials[m.id] = m.data; });
+  }
+}
+
+/** Sabse naya backup kab hua (backupRuns) — ek run mein ek baar */
+function latestBackupAt_(ctx) {
+  if (ctx.lastBackupAt !== undefined) return ctx.lastBackupAt;
+  var r = fsCall_('post', ':runQuery', { structuredQuery: { from: [{ collectionId: 'backupRuns' }], orderBy: [{ field: { fieldPath: 'at' }, direction: 'DESCENDING' }], limit: 1 } }) || [];
+  var d = r.filter(function (x) { return x.document; }).map(function (x) { return docOf_(x.document); })[0];
+  ctx.lastBackupAt = d && d.data.at instanceof Date ? d.data.at : null;
+  return ctx.lastBackupAt;
+}
+
+function hisabAlerts_(parent, pid, changed, ctx) {
+  var cur = getDoc_(parent + '/alerts/current');
+  var fresh = cur && cur.data.asOf === ctx.today && cur.data.refreshedAt instanceof Date && (ctx.started - cur.data.refreshedAt) < ALERT_REFRESH_MS;
+  if (fresh && !changed) return null;
+  loadParties_(ctx);
+  loadStoreItems_(ctx);
+  loadMasters_(ctx);
+  var today = ctx.today;
+  var byTime = function (a, b) { return a.updateTime < b.updateTime ? -1 : a.updateTime > b.updateTime ? 1 : 0; };
+  var machineLogs = rangeQuery_(parent, 'machineLogs', 'businessDate', BPMCCore.addDays(today, -1), today).sort(byTime).map(function (d) {
+    var x = d.data;
+    return { machineId: x.machineId, businessDate: x.businessDate, status: x.status, breakdownFrom: x.breakdownFrom || null, breakdownTo: x.breakdownTo || null, breakdownReason: x.breakdownReason || null, deleted: !!x.deleted };
+  });
+  var stock = null;
+  rangeQuery_(parent, 'days', 'date', BPMCCore.addDays(today, -7), today).forEach(function (d) {
+    if (d.data.stock && (!stock || d.data.date > stock.date)) stock = { date: d.data.date, items: d.data.stock };
+  });
+  var names = function (m) { var o = {}; Object.keys(m).forEach(function (k) { o[k] = (m[k] && m[k].name) || k; }); return o; };
+  var materials = {};
+  Object.keys(ctx.materials).forEach(function (k) {
+    var m = ctx.materials[k];
+    if (!m.deleted) materials[k] = { name: m.name || k, baseUnit: m.baseUnit || null, minStock: m.minStock != null && m.minStock !== '' ? Number(m.minStock) : null };
+  });
+  var sum = getDoc_(parent + '/storeSummary/current');
+  var lsum = getDoc_(parent + '/ledgerSummary/current');
+  var parties = {};
+  var lp = (lsum && lsum.data.parties) || {};
+  Object.keys(lp).forEach(function (k) { parties[k] = { name: lp[k].name || k, overduePaise: Number(lp[k].overduePaise) || 0, bakayaPaise: Number(lp[k].bakayaPaise) || 0 }; });
+  var drafts = query_(parent, 'dpr', 'status', 'DRAFT');
+
+  var items = BPMCCore.buildAlerts({
+    today: today,
+    now: ctx.started,
+    machineLogs: machineLogs,
+    machineNames: names(ctx.machines),
+    stock: stock,
+    materials: materials,
+    storeAlerts: (sum && sum.data.alerts) || [],
+    storeItemNames: names(ctx.storeItems),
+    contractorNames: names(ctx.parties),
+    parties: parties,
+    draftDprDates: drafts.map(function (d) { return d.id; }),
+    lastBackupAt: latestBackupAt_(ctx),
+  });
+  var prevKeys = ((cur && cur.data.items) || []).map(function (a) { return a.key; });
+  var diff = BPMCCore.diffAlerts(prevKeys, items);
+  var counts = { crit: 0, warn: 0, info: 0, total: items.length };
+  items.forEach(function (a) { counts[a.severity]++; });
+  var now = ctx.started;
+  var writes = [{ update: { name: fullName_(parent + '/alerts/current'), fields: encFields_({ asOf: today, refreshedAt: now, items: items, counts: counts }) } }];
+  diff.opened.forEach(function (a) {
+    writes.push({
+      update: { name: fullName_(parent + '/notifications/' + Utilities.getUuid()), fields: encFields_({ key: a.key, kind: a.kind, severity: a.severity, title: a.title, text: a.text, link: a.link, adminOnly: a.adminOnly, businessDate: today, createdAt: now, resolvedAt: null }) },
+      currentDocument: { exists: false },
+    });
+  });
+  diff.resolved.forEach(function (k) {
+    query_(parent, 'notifications', 'key', k).forEach(function (n) {
+      if (n.data.resolvedAt) return;
+      writes.push({ update: { name: n.name, fields: encFields_({ resolvedAt: now }) }, updateMask: { fieldPaths: ['resolvedAt'] } });
+    });
+  });
+  for (var i = 0; i < writes.length; i += 400) commit_(writes.slice(i, i + 400));
+
+  return { alerts: items.length, opened: diff.opened.length, resolved: diff.resolved.length, filed: autoFileDprs_(parent, pid, drafts, ctx) };
+}
+
+/** Lock na hui DPR: edit window band hote hi Obsidian mein md + json + pdf ("Not approved" ke saath). Purani file kabhi nahi chhedte. */
+function autoFileDprs_(parent, pid, drafts, ctx) {
+  if (!drafts.length) return 0;
+  var unlocks = {};
+  query_(parent, 'unlocks').forEach(function (u) { if (u.data.expiresAt instanceof Date) unlocks[u.id] = u.data.expiresAt; });
+  var dates = BPMCCore.dprAutoFileDates(drafts.map(function (d) { return { date: d.id, fp: d.data.fp || '', autoFiledFp: d.data.autoFiledFp || null }; }), ctx.started, unlocks);
+  if (!dates.length) return 0;
+  var proj = getDoc_('projects/' + pid);
+  var n = 0;
+  dates.forEach(function (date) {
+    var d = drafts.filter(function (x) { return x.id === date; })[0];
+    try {
+      var files = writeDprFiles_(proj.data, pid, date, d.data.snapshot, { notApproved: 'Not locked within the edit window — saved automatically on ' + BPMCCore.formatDate(ctx.today) }, ctx);
+      commit_([{
+        update: { name: d.name, fields: encFields_({ autoFiledFp: d.data.fp || '', autoFiled: { at: ctx.started, files: files } }) },
+        updateMask: { fieldPaths: ['autoFiledFp', 'autoFiled'] },
+        currentDocument: { updateTime: d.updateTime },
+      }]);
+      n++;
+    } catch (e) {
+      Logger.log('DPR auto-file ' + pid + ' ' + date + ': ' + (e && e.message || e));
+    }
+  });
+  return n;
 }
 
 /** Server ka soft-delete (reason ke saath) */

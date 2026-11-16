@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDpr, dprFingerprint, dprFolder, dprHtml, dprMarkdown, dprSame, dprWhatsapp, type DprInput } from "./dpr";
+import { buildDpr, dprFingerprint, dprFolder, dprHtml, dprMarkdown, dprSame, dprWhatsapp, dprAutoFileDates, type DprInput } from "./dpr";
 
 const input = (o: Partial<DprInput> = {}): DprInput => ({
   date: "2026-10-24",
@@ -118,6 +118,27 @@ describe("DPR — Obsidian file aur share", () => {
   it("khaali din ki file khaali nahi: saaf likha ho", () => {
     const md = dprMarkdown(buildDpr(input({ day: {}, machineLogs: [], workEntries: [], storeMoves: [], photos: [] })), {});
     expect(md).toContain("Is din koi entry nahi");
+  });
+
+  it("lock na hua din (edit window band hone par khud save): saaf likha ho ki approve nahi hua", () => {
+    const m = { notApproved: "Saved automatically after the edit window closed on 26 Oct 2026" };
+    const md = dprMarkdown(buildDpr(input()), m);
+    expect(md).toContain("Draft / मसौदा");
+    expect(md).toContain("Not approved / अनुमोदित नहीं: Saved automatically after the edit window closed on 26 Oct 2026");
+    expect(dprHtml(buildDpr(input()), m)).toContain("Not approved / अनुमोदित नहीं");
+  });
+
+  it("kaunsi Draft DPR Obsidian mein khud jaaye: window band, Admin ne khola nahi, pehle wahi data file nahi hua", () => {
+    const now = new Date("2026-11-17T01:00:00+05:30");
+    const drafts = [
+      { date: "2026-11-13", fp: "a" }, // band → file
+      { date: "2026-11-14", fp: "b", autoFiledFp: "b" }, // pehle hi file ho chuka
+      { date: "2026-11-12", fp: "c2", autoFiledFp: "c1" }, // Admin ne khol ke badla → nayi file
+      { date: "2026-11-11", fp: "d" }, // Admin ne abhi khola hua hai → abhi nahi
+      { date: "2026-11-15", fp: "e" }, // 17 raat tak khula → abhi nahi
+    ];
+    const unlocks = { "2026-11-11": new Date("2026-11-17T23:59:00+05:30") };
+    expect(dprAutoFileDates(drafts, now, unlocks)).toEqual(["2026-11-12", "2026-11-13"]);
   });
 
   it("PDF html: logo watermark, Hindi label, HTML safe", () => {

@@ -401,5 +401,55 @@ expect("Photo entries DONE (server ne dekh liya)", ["PH9", "PH1"].map((k) => get
   expect("DPR cascade: kal ka diesel 246 → 250, aaj ki DPR ka opening 250 + naya version", [dprOf("KSK", today)?.snapshot?.diesel?.opening, dprOf("KSK", today)?.version], [250, vBefore + 1]);
 }
 
+// ---- Phase 3: Alerts + notifications ----
+{
+  const ak = (pid) => (get(`projects/${pid}/alerts/current`)?.data?.items ?? []).map((a) => a.key);
+  const notifs = (pid, key) => S.query_(`projects/${pid}`, "notifications", "key", key);
+  // Cement ki limit 50 (stock 0), HPCL ka bill overdue, Poclain 200 aaj breakdown, backup 3 din purana
+  put("masters_materials/cement", { name: "Cement", baseUnit: "Bags", minStock: 50, deleted: null });
+  // Date Apps Script ke (VM) mahaul ka hona chahiye, warna timestamp nahi banta
+  put("backupRuns/old", { at: vm.runInContext(`new Date(${Date.now() - 3 * 86400000})`, sandbox), ok: true });
+  put("backupRuns/older", { at: vm.runInContext(`new Date(${Date.now() - 9 * 86400000})`, sandbox), ok: true });
+  put("projects/KSK/machineLogs/L3", P({ rev: 2, businessDate: today, machineId: "poc200", status: "BREAKDOWN", dieselLtr: 0, breakdownFrom: "10:30", breakdownReason: "Hydraulic pipe" }));
+  S.runHisab();
+  const keys = ak("KSK");
+  {
+    const items = get("projects/KSK/alerts/current")?.data?.items ?? [];
+    const bd = items.find((x) => x.key === "BREAKDOWN:poc200");
+    expect("Alerts: breakdown crit, kaaran aur samay ke saath; crit sab warn / info se pehle", [bd?.severity, bd?.text?.startsWith("Poclain 200 is in breakdown since"), bd?.text?.endsWith("10:30 — Hydraulic pipe"), items.findIndex((x) => x.severity !== "crit") > items.findIndex((x) => x.key === "BREAKDOWN:poc200")], ["crit", true, true, true]);
+  }
+  expect("Alerts: cement 0 (limit 50), HPCL overdue, backup 3 din purana (sirf Admin)", [keys.includes("LOW_MATERIAL:cement"), keys.includes("OVERDUE:hpcl"), get("projects/KSK/alerts/current")?.data?.items?.find((a) => a.key === "BACKUP")?.adminOnly], [true, true, true]);
+  expect("Alerts: gin-ti saaf (counts = list)", get("projects/KSK/alerts/current")?.data?.counts?.total, keys.length);
+  expect("Notification: breakdown ka ek notification bana", notifs("KSK", "BREAKDOWN:poc200").length, 1);
+
+  // Dobara chala (kuch nahi badla, ghante ke andar) → koi naya notification nahi
+  const refreshed = get("projects/KSK/alerts/current")?.data?.refreshedAt;
+  S.runHisab();
+  expect("Notification: kuch nahi badla → dobara nahi, alerts bhi dobara nahi bane", [notifs("KSK", "BREAKDOWN:poc200").length, String(get("projects/KSK/alerts/current")?.data?.refreshedAt)], [1, String(refreshed)]);
+
+  // Machine theek ho gayi → alert gaya, notification par resolvedAt
+  put("projects/KSK/machineLogs/L3", P({ rev: 3, businessDate: today, machineId: "poc200", status: "BREAKDOWN", dieselLtr: 0, breakdownFrom: "10:30", breakdownTo: "15:00", breakdownReason: "Hydraulic pipe" }));
+  S.runHisab();
+  expect("Breakdown theek → alert hata, notification 'resolved'", [ak("KSK").includes("BREAKDOWN:poc200"), !!notifs("KSK", "BREAKDOWN:poc200")[0]?.data?.resolvedAt], [false, true]);
+
+  // DPR: Dantewada mein kal ki Draft → yaad dilana (info)
+  const d1 = B.addDays(today, -1);
+  const snap = B.buildDpr({ date: d1, projectName: "EMRS Dantewada", day: {}, materials: {}, machines: {}, contractors: {}, machineLogs: [], workEntries: [], storeMoves: [], creditors: null, photos: [] });
+  put(`projects/DNT/dpr/${d1}`, { date: d1, status: "DRAFT", version: 0, snapshot: snap, fp: B.dprFingerprint(snap) });
+  // Dantewada: 5 din purani Draft (window band) → Obsidian mein khud, "Not approved" ke saath
+  const d5 = B.addDays(today, -5);
+  const snap5 = B.buildDpr({ date: d5, projectName: "EMRS Dantewada", day: {}, materials: {}, machines: {}, contractors: {}, machineLogs: [], workEntries: [], storeMoves: [], creditors: null, photos: [] });
+  put(`projects/DNT/dpr/${d5}`, { date: d5, status: "DRAFT", version: 0, snapshot: snap5, fp: B.dprFingerprint(snap5) });
+  put("projects/DNT/alerts/current", { asOf: "2000-01-01", items: [] }); // purana → dobara banao
+  S.runHisab();
+  expect("DPR alert: kal ki Draft lock nahi → info alert, DPR page ka link", get("projects/DNT/alerts/current")?.data?.items?.find((a) => a.key === `DPR:${d1}`)?.link, `/dpr?date=${d1}`);
+  const autoMd = () => [...S.DriveApp._files.values()].filter((x) => x.path.includes("EMRS DANTEWADA NBCC/Daily Report") && x.name.startsWith(d5 + " DPR") && x.name.endsWith(".md"));
+  expect("Bina lock wali DPR: window band → md + json + pdf, 'Not approved' likha", [autoMd().length, autoMd()[0]?.blob.getDataAsString().includes("Not approved / अनुमोदित नहीं"), [...S.DriveApp._files.values()].some((x) => x.name === d5 + " DPR.pdf"), !!get(`projects/DNT/dpr/${d5}`)?.data?.autoFiledFp], [1, true, true, true]);
+  expect("Bina lock wali DPR: Draft hi rahi (version nahi bana)", [get(`projects/DNT/dpr/${d5}`)?.data?.status, get(`projects/DNT/dpr/${d5}/versions/v1`)], ["DRAFT", null]);
+  put("projects/DNT/alerts/current", { asOf: "2000-01-01", items: [] });
+  S.runHisab();
+  expect("Bina lock wali DPR: dobara chala → file dobara nahi", autoMd().length, 1);
+}
+
 console.log(fails ? `\n${fails} jaanch FAIL` : "\nSab server jaanch pass");
 process.exit(fails ? 1 : 0);

@@ -342,3 +342,14 @@ th { background: #eef2fb; color: #3b4a63; }
 }
 /* Sun (dhoop) mode: high-contrast hi rahe */
 :root[data-theme="sun"] .stats > .stat, :root[data-theme="sun"] .mods > .mod, :root[data-theme="sun"] .kpi, :root[data-theme="sun"] .dmod { border-color: #000; box-shadow: none; }
+
+/* ---- Phase 3: alerts + ghanti ---- */
+.print-only { display: none; }
+@media print { .print-only { display: block; } }
+.bell { font-size: 18px; }
+.bell .badge { position: absolute; top: 2px; right: 2px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--crit); color: #fff; font-size: 11px; font-weight: 800; line-height: 18px; text-align: center; box-shadow: 0 0 0 2px var(--surface); }
+.notif-pop { position: fixed; top: 64px; right: 12px; z-index: 60; width: min(380px, calc(100vw - 24px)); max-height: min(70vh, 560px); overflow: auto; padding: 0; }
+.notif-pop .card-head { position: sticky; top: 0; background: var(--surface); z-index: 1; }
+.notif-pop .row { display: flex; gap: 10px; align-items: flex-start; padding: 10px 14px; border-bottom: 1px solid var(--line); text-decoration: none; color: inherit; }
+.notif-pop .row.unread { background: var(--surface-2); }
+.notif-pop .foot { display: block; padding: 10px 14px; text-align: center; font-weight: 700; }

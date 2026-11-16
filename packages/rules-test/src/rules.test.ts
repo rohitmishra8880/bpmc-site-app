@@ -579,3 +579,35 @@ describe("masters (material / Oil & Lubricants)", () => {
     await assertFails(deleteDoc(doc(dbAs(ADMIN), ref)));
   });
 });
+
+describe("alerts + notifications (Phase 3)", () => {
+  it("alerts / notifications: member padhe, likhe koi nahi (Admin bhi nahi — sirf server)", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), `projects/${PID}/alerts/current`), { items: [] });
+      await setDoc(doc(ctx.firestore(), `projects/${PID}/notifications/n1`), { key: "BREAKDOWN:jcb", text: "x" });
+    });
+    for (const p of [`projects/${PID}/alerts/current`, `projects/${PID}/notifications/n1`]) {
+      await assertSucceeds(getDoc(doc(dbAs(SITE), p)));
+      await assertFails(getDoc(doc(dbAs(OTHER), p)));
+      await assertFails(getDoc(doc(dbAs(INACTIVE), p)));
+      await assertFails(setDoc(doc(dbAs(ADMIN), p), { items: [] }));
+      await assertFails(updateDoc(doc(dbAs(SITE), p), { text: "fake" }));
+    }
+    await assertFails(setDoc(doc(dbAs(SITE), `projects/${PID}/notifications/fake`), { key: "X", text: "fake message" }));
+  });
+
+  it("ghanti 'dekh liya': har user sirf apna, sirf seenAt = abhi ka samay", async () => {
+    const mine = `projects/${PID}/notifSeen/${SITE}`;
+    await assertSucceeds(setDoc(doc(dbAs(SITE), mine), { seenAt: serverTimestamp() }));
+    await assertSucceeds(getDoc(doc(dbAs(SITE), mine)));
+    await assertSucceeds(setDoc(doc(dbAs(SITE), mine), { seenAt: serverTimestamp() }));
+    // doosre ka nahi (Admin bhi nahi), purana / aage ka samay nahi, faltu field nahi, mitana nahi
+    await assertFails(setDoc(doc(dbAs(ADMIN), mine), { seenAt: serverTimestamp() }));
+    await assertFails(getDoc(doc(dbAs(OTHER), mine)));
+    await assertFails(setDoc(doc(dbAs(SITE), mine), { seenAt: Timestamp.fromDate(new Date("2030-01-01")) }));
+    await assertFails(setDoc(doc(dbAs(SITE), mine), { seenAt: serverTimestamp(), role: "admin" }));
+    await assertFails(deleteDoc(doc(dbAs(SITE), mine)));
+    // jis project ka member nahi, wahan nahi
+    await assertFails(setDoc(doc(dbAs(OTHER), `projects/${PID}/notifSeen/${OTHER}`), { seenAt: serverTimestamp() }));
+  });
+});
