@@ -224,6 +224,8 @@ function runHisab(force) {
     saveHisabGate_({ seenAt: gate.latest ? gate.latest.toISOString() : gate.g.seenAt || null, date: today, fullAt: started.toISOString(), force: didEntries });
   } catch (e) {
     log.error = String(e && e.message || e);
+    // Google ki roz ki limit: 1 ghanta koi call nahi — warna har adhoora run khuli hui calls kha jaata hai aur limit kabhi nahi bharti
+    if (isQuotaError_(e)) pauseHisab_(started);
     throw e;
   } finally {
     try {
@@ -232,6 +234,9 @@ function runHisab(force) {
           update: { name: fullName_('serverRuns/' + Utilities.formatDate(started, 'Asia/Kolkata', "yyyyMMdd'T'HHmmss")), fields: encFields_({ startedAt: started, ms: new Date() - started, projects: log.projects, error: log.error }) },
         }]);
       }
+    } catch (e2) {
+      // Log likhna fail ho to asli error na chhupe
+      Logger.log('serverRuns log not written: ' + (e2 && e2.message || e2));
     } finally {
       lock.releaseLock();
     }
@@ -249,6 +254,8 @@ function hisabGate_(started, today) {
   var props = PropertiesService.getScriptProperties();
   var g = {};
   try { g = JSON.parse(props.getProperty(HISAB_GATE_PROP) || '{}') || {}; } catch (e) { g = {}; }
+  // Limit ke baad ruke hue hain → ek bhi call nahi
+  if (g.pausedUntil && started < new Date(g.pausedUntil)) return { need: false, g: g, latest: null, paused: true };
   var latest = null;
   try {
     var sq = { from: [{ collectionId: 'auditLog', allDescendants: true }], orderBy: [{ field: { fieldPath: 'at' }, direction: 'DESCENDING' }], limit: 1 };
@@ -262,6 +269,22 @@ function hisabGate_(started, today) {
   var changed = !!latest && (!g.seenAt || latest > new Date(g.seenAt));
   var stale = !g.fullAt || (started - new Date(g.fullAt)) >= HISAB_FULL_EVERY_MS;
   return { need: changed || !!g.force || g.date !== today || stale, g: g, latest: latest };
+}
+
+var HISAB_QUOTA_PAUSE_MS = 60 * 60 * 1000;
+
+function isQuotaError_(e) {
+  return /Service invoked too many times|Bandwidth quota exceeded/i.test(String(e && e.message || e));
+}
+
+/** Gate ka baaki nishaan wahi rakho, bas pausedUntil + force (limit khulte hi poora hisab) */
+function pauseHisab_(started) {
+  var props = PropertiesService.getScriptProperties();
+  var g = {};
+  try { g = JSON.parse(props.getProperty(HISAB_GATE_PROP) || '{}') || {}; } catch (x) { g = {}; }
+  g.pausedUntil = new Date(started.getTime() + HISAB_QUOTA_PAUSE_MS).toISOString();
+  g.force = true;
+  props.setProperty(HISAB_GATE_PROP, JSON.stringify(g));
 }
 
 function saveHisabGate_(g) {

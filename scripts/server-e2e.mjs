@@ -46,6 +46,7 @@ function makeDrive() {
 // ---- Apps Script stubs ----
 const logs = [];
 let fetchCount = 0;
+let quotaAfter = null; // itni call ke baad Google ki limit (nakli)
 const props = new Map([["FIREBASE_PROJECT_ID", PROJECT]]);
 const sandbox = {
   console,
@@ -53,6 +54,7 @@ const sandbox = {
   UrlFetchApp: {
     fetch: (url, o) => {
       fetchCount++;
+      if (quotaAfter !== null && fetchCount > quotaAfter) throw new Error("Exception: Service invoked too many times for one day: urlfetch.");
       const r = http(o.method ?? "get", url.replace("https://firestore.googleapis.com/v1/projects/" + PROJECT, `http://${HOST}/v1/projects/${PROJECT}`), o.payload);
       return { getResponseCode: () => r.code, getContentText: () => r.text };
     },
@@ -481,6 +483,23 @@ expect("Photo entries DONE (server ne dekh liya)", ["PH9", "PH1"].map((k) => get
   fetchCount = 0;
   S.runHisab();
   expect("Gate: din badla → poora hisab", fetchCount > 10, true);
+
+  // Limit beech mein khatam (nayi entry ke saath poora run, 5 call ke baad) → 1 ghanta ruko, ek bhi call nahi
+  put("projects/KSK/auditLog/ga2", { entity: "stockMoves/g1", action: "UPDATE", rev: 2, by: "munshi@bpmc", at: vm.runInContext("new Date()", sandbox) });
+  fetchCount = 0;
+  quotaAfter = 5;
+  let threw = false;
+  try { S.runHisab(); } catch (e) { threw = String(e.message).includes("too many times"); }
+  quotaAfter = null;
+  const gp = JSON.parse(props.get("HISAB_GATE"));
+  expect("Limit: asli error dikhe (log likhne ka error use na chhupaye), 1 ghante ka pause", [threw, new Date(gp.pausedUntil) > new Date(Date.now() + 55 * 60000), gp.force], [true, true, true]);
+  fetchCount = 0;
+  S.runHisab();
+  expect("Limit: pause mein run → 0 call", fetchCount, 0);
+  props.set("HISAB_GATE", JSON.stringify({ ...gp, pausedUntil: new Date(Date.now() - 1000).toISOString() }));
+  fetchCount = 0;
+  S.runHisab();
+  expect("Limit: pause khatam → poora hisab (adhoora kaam pura), phir pause nahi", [fetchCount > 10, !!JSON.parse(props.get("HISAB_GATE")).pausedUntil && new Date(JSON.parse(props.get("HISAB_GATE")).pausedUntil) > new Date()], [true, false]);
 }
 
 console.log(fails ? `\n${fails} jaanch FAIL` : "\nSab server jaanch pass");
