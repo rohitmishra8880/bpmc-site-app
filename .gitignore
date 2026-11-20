@@ -31,3 +31,6 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 apps/server/src/local-setup.js
+
+# Claude Code — laptop ki apni settings (repo mein nahi)
+.claude/settings.local.json
