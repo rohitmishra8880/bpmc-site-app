@@ -104,10 +104,11 @@ describe("alerts — store register", () => {
 });
 
 describe("alerts — bakaya overdue", () => {
-  it("sirf overdue wali party, ₹ Indian format mein", () => {
+  it("sirf overdue wali party, ₹ Indian format mein; thekedar ka bakaya alert nahi (RA bill se chukta — Rohit)", () => {
     const a = buildAlerts(base({ parties: {
-      p1: { name: "Shree Traders", overduePaise: 5000000, bakayaPaise: 8000000 },
-      p2: { name: "Jai Hardware", overduePaise: 0, bakayaPaise: 100000 },
+      p1: { name: "Shree Traders", overduePaise: 5000000, bakayaPaise: 8000000, kind: "PARTY" },
+      p2: { name: "Jai Hardware", overduePaise: 0, bakayaPaise: 100000, kind: "PARTY" },
+      suraj: { name: "Suraj", overduePaise: 75665000, bakayaPaise: 75665000, kind: "CONTRACTOR" },
     } }));
     expect(a).toHaveLength(1);
     expect(a[0]).toMatchObject({ key: "OVERDUE:p1", severity: "warn", text: "Shree Traders: ₹50,000.00 overdue (total bakaya ₹80,000.00)", link: "/creditors" });

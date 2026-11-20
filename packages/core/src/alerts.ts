@@ -43,7 +43,8 @@ export interface AlertInput {
   storeAlerts: StoreAlert[];
   storeItemNames: Record<string, string>;
   contractorNames: Record<string, string>;
-  parties: Record<string, { name: string; overduePaise: number; bakayaPaise: number }>;
+  /** kind CONTRACTOR ka overdue alert nahi banta (thekedar ko RA bill se paisa — Rohit) */
+  parties: Record<string, { name: string; overduePaise: number; bakayaPaise: number; kind?: string | null }>;
   /** Jin dino ki DPR abhi Draft hai (lock nahi) */
   draftDprDates: string[];
   lastBackupAt: Date | null;
@@ -126,7 +127,7 @@ function store(i: AlertInput): SiteAlert[] {
 
 function overdue(i: AlertInput): SiteAlert[] {
   return Object.entries(i.parties)
-    .filter(([, p]) => p.overduePaise > 0)
+    .filter(([, p]) => p.overduePaise > 0 && p.kind !== "CONTRACTOR")
     .map(([id, p]): SiteAlert => ({ key: `OVERDUE:${id}`, kind: "OVERDUE", severity: "warn", title: "Payment overdue", text: `${p.name}: ${formatINR(p.overduePaise)} overdue (total bakaya ${formatINR(p.bakayaPaise)})`, link: "/creditors", since: null, adminOnly: false }));
 }
 

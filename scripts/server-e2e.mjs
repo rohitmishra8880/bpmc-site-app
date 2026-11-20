@@ -424,6 +424,13 @@ expect("Photo entries DONE (server ne dekh liya)", ["PH9", "PH1"].map((k) => get
     expect("Alerts: breakdown crit, kaaran aur samay ke saath; crit sab warn / info se pehle", [bd?.severity, bd?.text?.startsWith("Poclain 200 is in breakdown since"), bd?.text?.endsWith("10:30 — Hydraulic pipe"), items.findIndex((x) => x.severity !== "crit") > items.findIndex((x) => x.key === "BREAKDOWN:poc200")], ["crit", true, true, true]);
   }
   expect("Alerts: cement 0 (limit 50), HPCL overdue, backup 3 din purana (sirf Admin)", [keys.includes("LOW_MATERIAL:cement"), keys.includes("OVERDUE:hpcl"), get("projects/KSK/alerts/current")?.data?.items?.find((a) => a.key === "BACKUP")?.adminOnly], [true, true, true]);
+  {
+    // Thekedar (masters_contractors) ka bakaya overdue ho tab bhi alert nahi — sirf party ka (Rohit)
+    const lp = get("projects/KDG/ledgerSummary/current")?.data?.parties ?? {};
+    const overdueContractors = Object.keys(lp).filter((k) => lp[k].kind === "CONTRACTOR" && lp[k].overduePaise > 0);
+    expect("Alerts: thekedar ka overdue bakaya hai (jaanch ka matlab bane)", overdueContractors.length > 0, true);
+    expect("Alerts: thekedar ka overdue alert nahi bana", ak("KDG").filter((k) => overdueContractors.some((c) => k === "OVERDUE:" + c)), []);
+  }
   expect("Alerts: gin-ti saaf (counts = list)", get("projects/KSK/alerts/current")?.data?.counts?.total, keys.length);
   expect("Notification: breakdown ka ek notification bana", notifs("KSK", "BREAKDOWN:poc200").length, 1);
 

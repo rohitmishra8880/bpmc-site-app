@@ -866,7 +866,7 @@ function hisabAlerts_(parent, pid, changed, ctx) {
   var lsum = getDoc_(parent + '/ledgerSummary/current');
   var parties = {};
   var lp = (lsum && lsum.data.parties) || {};
-  Object.keys(lp).forEach(function (k) { parties[k] = { name: lp[k].name || k, overduePaise: Number(lp[k].overduePaise) || 0, bakayaPaise: Number(lp[k].bakayaPaise) || 0 }; });
+  Object.keys(lp).forEach(function (k) { parties[k] = { name: lp[k].name || k, overduePaise: Number(lp[k].overduePaise) || 0, bakayaPaise: Number(lp[k].bakayaPaise) || 0, kind: lp[k].kind || null }; });
   var drafts = query_(parent, 'dpr', 'status', 'DRAFT');
 
   var items = BPMCCore.buildAlerts({
