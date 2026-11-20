@@ -23,3 +23,4 @@ export * from "./photo";
 export * from "./dpr";
 export * from "./alerts";
 export * from "./attendancePhoto";
+export * from "./help";

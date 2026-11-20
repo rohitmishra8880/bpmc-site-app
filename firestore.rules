@@ -125,10 +125,12 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Masters: masters_materials, masters_machines, masters_contractors, masters_parties, masters_storeItems, masters_staff
+    // Masters: masters_materials, masters_machines, masters_contractors, masters_parties, masters_storeItems, masters_staff,
+    // Help Center (Phase 4): masters_contacts (emergency), masters_sop
     match /{col}/{id} {
       function isMaster() {
-        return col in ['masters_materials', 'masters_machines', 'masters_contractors', 'masters_parties', 'masters_storeItems', 'masters_staff'];
+        return col in ['masters_materials', 'masters_machines', 'masters_contractors', 'masters_parties', 'masters_storeItems', 'masters_staff',
+                       'masters_contacts', 'masters_sop'];
       }
       allow read: if isMaster() && isActiveUser();
       allow create: if isMaster() && can('masters.edit')

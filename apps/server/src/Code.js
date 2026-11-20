@@ -1464,7 +1464,7 @@ var PROJECT_COLLECTIONS = ['stockMoves', 'machineLogs', 'machineDeductions', 'la
   'alerts', 'notifications', 'notifSeen'];
 var BACKUP_NOT_ENTRIES = ['days', 'auditLog', 'dpr', 'alerts', 'notifications', 'notifSeen'];
 var GLOBAL_COLLECTIONS = ['users', 'roles', 'settings', 'projects', 'masters_materials', 'masters_machines', 'masters_contractors',
-  'masters_parties', 'masters_storeItems', 'masters_staff', 'masters_companyAccounts', 'auditLog'];
+  'masters_parties', 'masters_storeItems', 'masters_staff', 'masters_companyAccounts', 'masters_contacts', 'masters_sop', 'auditLog'];
 
 function obsidianRoot_() {
   var it = DriveApp.getRootFolder().getFoldersByName(OBSIDIAN_ROOT);

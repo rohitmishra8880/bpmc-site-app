@@ -521,16 +521,17 @@ describe("Admin ke kaam", () => {
 });
 
 /** Master + global audit ek batch mein (web app ka saveMaster isi tarah likhta hai) */
-function writeMaster(db: Firestore, email: string, id: string, data: Record<string, unknown>, rev: number, action: string, opts: { withAudit?: boolean; reason?: string | null } = {}) {
+function writeMaster(db: Firestore, email: string, id: string, data: Record<string, unknown>, rev: number, action: string, opts: { withAudit?: boolean; reason?: string | null; col?: string } = {}) {
   const auditId = `g${++auditSeq}`;
   const batch = writeBatch(db);
-  const ref = doc(db, `masters_materials/${id}`);
+  const col = opts.col ?? "masters_materials";
+  const ref = doc(db, `${col}/${id}`);
   const base = { ...data, rev, lastAuditId: auditId, updatedBy: email };
   if (action === "CREATE") batch.set(ref, { ...base, createdBy: email, deleted: null });
   else batch.update(ref, base);
   if (opts.withAudit !== false) {
     batch.set(doc(db, `auditLog/${auditId}`), {
-      entity: `masters_materials/${id}`,
+      entity: `${col}/${id}`,
       action,
       rev,
       by: email,
@@ -610,4 +611,18 @@ describe("alerts + notifications (Phase 3)", () => {
     // jis project ka member nahi, wahan nahi
     await assertFails(setDoc(doc(dbAs(OTHER), `projects/${PID}/notifSeen/${OTHER}`), { seenAt: serverTimestamp() }));
   });
+});
+
+describe("Help Center masters: emergency contacts, SOP (Phase 4)", () => {
+  for (const col of ["masters_contacts", "masters_sop"]) {
+    it(`${col}: audit ke saath jodna / badalna, sab active user padhe; audit ke bina nahi; delete sirf soft`, async () => {
+      const db = dbAs(SITE);
+      const data = col === "masters_contacts" ? { name: "District Hospital Kanker", kind: "HOSPITAL", phone: "07868222130", projectId: "ALL" } : { title: "Concrete pour checklist", category: "CONCRETE", steps: "1. Slump test" };
+      await assertSucceeds(writeMaster(db, SITE, "h1", data, 1, "CREATE", { col }));
+      await assertSucceeds(getDoc(doc(dbAs(OTHER), `${col}/h1`)));
+      await assertFails(getDoc(doc(dbAs(INACTIVE), `${col}/h1`)));
+      await assertFails(writeMaster(db, SITE, "h2", data, 1, "CREATE", { col, withAudit: false }));
+      await assertFails(deleteDoc(doc(db, `${col}/h1`)));
+    });
+  }
 });

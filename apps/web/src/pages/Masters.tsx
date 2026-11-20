@@ -1,13 +1,14 @@
 import { collection, onSnapshot, serverTimestamp, type DocumentData } from "firebase/firestore";
 import { useEffect, useMemo, useState } from "react";
-import { checkGstin, formatINR, isIfsc, normalizeBankAccount, normalizeMobile, toPaise } from "@bpmc/core";
+import { checkGstin, formatINR, isIfsc, normalizeBankAccount, normalizeMobile, normalizePhone, toPaise } from "@bpmc/core";
 import { saveMaster } from "../lib/audit";
 import { useMaster } from "../lib/masters";
 import { can, useProfile } from "../lib/auth";
 import { db } from "../lib/firebase";
+import { useProjects } from "../lib/projects";
 import { Dialog, errorText, PageHead, ReasonDialog, useToast } from "../lib/ui";
 
-type FieldType = "text" | "number" | "money" | "select" | "mobile" | "gstin" | "ifsc" | "date" | "last4" | "account";
+type FieldType = "text" | "number" | "money" | "select" | "mobile" | "gstin" | "ifsc" | "date" | "last4" | "account" | "phone" | "longtext";
 
 interface Field {
   key: string;
@@ -128,6 +129,35 @@ const MASTERS: { col: string; label: string; one: string; fields: Field[]; admin
       { key: "ifsc", label: "IFSC", type: "ifsc", show: true },
     ],
   },
+  // Help Center (Phase 4) — asli number hi; koi dummy / sample nahi (galti #15)
+  {
+    col: "masters_contacts",
+    label: "Emergency contacts",
+    one: "contact",
+    fields: [
+      { key: "name", label: "Name", type: "text", required: true, show: true, hint: "e.g. District Hospital Kanker, Keshkal Police Station" },
+      {
+        key: "kind", label: "Type", type: "select", required: true, show: true,
+        options: [["HOSPITAL", "Hospital"], ["AMBULANCE", "Ambulance"], ["POLICE", "Police"], ["FIRE", "Fire brigade"], ["ELECTRICITY", "Electricity"], ["DEPARTMENT", "Department / Engineer"], ["COMPANY", "Company office"], ["OTHER", "Other"]],
+      },
+      { key: "phone", label: "Phone", type: "phone", required: true, show: true, hint: "Mobile, 108 / 112, or landline with STD code (07786-242100)" },
+      { key: "projectId", label: "Site", type: "select", required: true, show: true, optionsFrom: "projects" },
+      { key: "address", label: "Address / distance", type: "text", hint: "e.g. 12 km from site, NH-30" },
+    ],
+  },
+  {
+    col: "masters_sop",
+    label: "SOP",
+    one: "SOP",
+    fields: [
+      { key: "title", label: "Title", type: "text", required: true, show: true, hint: "e.g. Concrete pour checklist" },
+      {
+        key: "category", label: "Category", type: "select", required: true, show: true,
+        options: [["SAFETY", "Safety"], ["CONCRETE", "Concrete"], ["STEEL", "Steel"], ["STORE", "Store"], ["MACHINERY", "Machinery"], ["REPORT", "Daily report"], ["OTHER", "Other"]],
+      },
+      { key: "steps", label: "Steps", type: "longtext", required: true, hint: "One step per line" },
+    ],
+  },
 ];
 
 type Row = DocumentData & { id: string };
@@ -136,9 +166,10 @@ function getPath(o: DocumentData, key: string): unknown {
   return key.split(".").reduce<unknown>((v, k) => (v as DocumentData | undefined)?.[k === "conv" ? "conversions" : k], o);
 }
 
-function display(f: Field, v: unknown): string {
+function display(f: Field, v: unknown, names?: Record<string, string>): string {
   if (v === undefined || v === null || v === "") return "—";
   if (f.type === "money") return formatINR(v as number);
+  if (f.type === "select" && f.optionsFrom === "projects") return names?.[String(v)] ?? String(v);
   if (f.type === "select") return f.options?.find((o) => o[0] === v)?.[1] ?? String(v);
   return String(v);
 }
@@ -153,6 +184,8 @@ export function Masters() {
   const [editing, setEditing] = useState<Row | "new" | null>(null);
   const [removing, setRemoving] = useState<Row | null>(null);
   const editable = m.adminOnly ? profile.isAdmin : can(profile, "masters.edit");
+  const { projects } = useProjects();
+  const siteNames: Record<string, string> = { ALL: "All sites", ...Object.fromEntries(projects.map((p) => [p.id, p.name])) };
 
   useEffect(() => {
     setRows([]);
@@ -222,7 +255,7 @@ export function Masters() {
               {visible.map((r) => (
                 <tr key={r.id} className={r.deleted ? "deleted" : ""}>
                   {cols.map((f) => (
-                    <td key={f.key}>{f.key === "name" ? <b>{display(f, getPath(r, f.key))}</b> : display(f, getPath(r, f.key))}</td>
+                    <td key={f.key}>{f.key === "name" ? <b>{display(f, getPath(r, f.key), siteNames)}</b> : display(f, getPath(r, f.key), siteNames)}</td>
                   ))}
                   <td>
                     <div className="actions">
@@ -278,11 +311,14 @@ function MasterForm({ m, row, onClose }: { m: (typeof MASTERS)[number]; row: Row
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const partyOptions = useMaster("masters_parties");
+  const { projects } = useProjects();
+  const optionsOf = (f: Field): [string, string][] =>
+    f.optionsFrom === "projects" ? [["ALL", "All sites"], ...projects.map((p): [string, string] => [p.id, p.name])] : f.optionsFrom ? partyOptions.map((p): [string, string] => [p.id, p.name]) : f.options!;
   const [vals, setVals] = useState<Record<string, string>>(() => {
     const v: Record<string, string> = {};
     for (const f of m.fields) {
       const x = row ? getPath(row, f.key) : undefined;
-      v[f.key] = x === undefined || x === null ? (f.type === "select" && f.required ? f.options![0]![0] : "") : f.type === "money" ? String((x as number) / 100) : String(x);
+      v[f.key] = x === undefined || x === null ? (f.type === "select" && f.required ? (f.optionsFrom === "projects" ? "ALL" : f.options![0]![0]) : "") : f.type === "money" ? String((x as number) / 100) : String(x);
     }
     return v;
   });
@@ -293,6 +329,7 @@ function MasterForm({ m, row, onClose }: { m: (typeof MASTERS)[number]; row: Row
     if (!v) return f.required ? { err: "Required" } : {};
     if ((f.type === "number" || f.type === "money") && (!Number.isFinite(Number(v)) || Number(v) < 0)) return { err: "Enter a valid number" };
     if (f.type === "mobile" && !normalizeMobile(v)) return { err: "10-digit mobile starting with 6–9" };
+    if (f.type === "phone" && !normalizePhone(v)) return { err: "Mobile (10 digits), 108 / 112, or landline with STD code" };
     if (f.type === "ifsc" && !isIfsc(v)) return { err: "IFSC like SBIN0001842" };
     if (f.type === "account" && !normalizeBankAccount(v)) return { err: "Account no. must be 9–18 digits" };
     if (f.type === "last4" && !/^\d{4}$/.test(v)) return { err: "Exactly 4 digits" };
@@ -316,6 +353,7 @@ function MasterForm({ m, row, onClose }: { m: (typeof MASTERS)[number]; row: Row
       if (v !== "" && f.type === "number") out = Number(v);
       if (v !== "" && f.type === "money") out = toPaise(Number(v));
       if (v !== "" && f.type === "mobile") out = normalizeMobile(v);
+      if (v !== "" && f.type === "phone") out = normalizePhone(v);
       if (v !== "" && f.type === "account") out = normalizeBankAccount(v);
       if (v !== "" && (f.type === "gstin" || f.type === "ifsc")) out = v.toUpperCase();
       if (f.key.startsWith("conv.")) {
@@ -343,7 +381,7 @@ function MasterForm({ m, row, onClose }: { m: (typeof MASTERS)[number]; row: Row
             const id = `f-${f.key}`;
             const e = errors[i]!;
             return (
-              <div className="field" key={f.key}>
+              <div className="field" key={f.key} style={f.type === "longtext" ? { gridColumn: "1 / -1" } : undefined}>
                 <label htmlFor={id}>
                   {f.label}
                   {f.required && " *"}
@@ -351,18 +389,20 @@ function MasterForm({ m, row, onClose }: { m: (typeof MASTERS)[number]; row: Row
                 {f.type === "select" ? (
                   <select id={id} className="input" value={vals[f.key]} onChange={(ev) => setVals({ ...vals, [f.key]: ev.target.value })}>
                     {!f.required && <option value="">—</option>}
-                    {(f.optionsFrom ? partyOptions.map((p): [string, string] => [p.id, p.name]) : f.options!).map(([v, l]) => (
+                    {optionsOf(f).map(([v, l]) => (
                       <option key={v} value={v}>
                         {l}
                       </option>
                     ))}
                   </select>
+                ) : f.type === "longtext" ? (
+                  <textarea id={id} className="input" rows={8} value={vals[f.key]} onChange={(ev) => setVals({ ...vals, [f.key]: ev.target.value })} />
                 ) : (
                   <input
                     id={id}
                     className="input"
                     type={f.type === "date" ? "date" : "text"}
-                    inputMode={f.type === "number" || f.type === "money" || f.type === "mobile" || f.type === "last4" || f.type === "account" ? "decimal" : undefined}
+                    inputMode={f.type === "number" || f.type === "money" || f.type === "mobile" || f.type === "last4" || f.type === "account" ? "decimal" : f.type === "phone" ? "tel" : undefined}
                     value={vals[f.key]}
                     onChange={(ev) => setVals({ ...vals, [f.key]: ev.target.value })}
                   />

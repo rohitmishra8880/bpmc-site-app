@@ -9,6 +9,7 @@ import { Dashboard } from "./pages/Dashboard";
 import { Alerts } from "./pages/Alerts";
 import { Dpr } from "./pages/Dpr";
 import { EditHistory } from "./pages/EditHistory";
+import { Help } from "./pages/Help";
 import { Inventory } from "./pages/Inventory";
 import { Machinery } from "./pages/Machinery";
 import { Login, NoAccess } from "./pages/Login";
@@ -45,7 +46,7 @@ function Gate() {
           <Route path="dpr" element={<Dpr />} />
           <Route path="alerts" element={<Alerts />} />
           <Route path="ai" element={<Soon title="AI Insights" phase="Phase 4" what="Questions answered from real site data" />} />
-          <Route path="help" element={<Soon title="Help Center" phase="Phase 4" what="Calculators, SOPs, emergency contacts" />} />
+          <Route path="help" element={<Help />} />
           <Route path="bin" element={<RecycleBin />} />
           <Route path="settings" element={<Settings />} />
           <Route path="*" element={<Soon title="Page not found" phase="—" what="This link is not valid" />} />

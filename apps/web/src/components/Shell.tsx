@@ -40,7 +40,7 @@ const NAV: { group: string | null; items: NavItem[] }[] = [
     group: "Help",
     items: [
       { to: "/ai", ic: "✨", label: "AI Insights", soon: "P4" },
-      { to: "/help", ic: "❔", label: "Help Center", soon: "P4" },
+      { to: "/help", ic: "❔", label: "Help Center" },
     ],
   },
   {

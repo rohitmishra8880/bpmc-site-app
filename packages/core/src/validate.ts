@@ -43,6 +43,18 @@ export function normalizeMobile(raw: string): string | null {
   return /^[6-9]\d{9}$/.test(d) ? d : null;
 }
 
+/** Emergency / office number: 10 ank mobile, chhota sarkari number (100, 108, 112, 1912…), ya STD ke saath landline (0 se). Galat ho to null. */
+export function normalizePhone(raw: string): string | null {
+  // STD code ke baad dash / space (07786-242100) = landline — warna 0 hata ke mobile jaisa dikhta hai
+  if (/^0\d{2,4}[\s-]+\d{6,8}$/.test(raw.trim())) return raw.replace(/[\s-]/g, "");
+  const m = normalizeMobile(raw);
+  if (m) return m;
+  const d = raw.replace(/[\s()-]/g, "");
+  if (/^1\d{2,3}$/.test(d)) return d;
+  if (/^0\d{9,10}$/.test(d)) return d;
+  return null;
+}
+
 /** Bank account no.: Indian bank 9–18 ank. Space / dash hata ke sirf ank, galat ho to null. */
 export function normalizeBankAccount(raw: string): string | null {
   const d = raw.replace(/[\s-]/g, "");
