@@ -31,7 +31,7 @@ function makeDrive() {
       createFile: (a, b, c) => {
         const blob = typeof a === "string" ? { name: a, content: b, mime: c, getDataAsString: () => b, getBytes: () => [...Buffer.from(b)], getContentType: () => c } : a;
         const id = "file_" + (files.size + 1);
-        const file = { id, name: blob.name, path: path + "/" + blob.name, blob, getId: () => id, getName: () => blob.name, getBlob: () => blob, getUrl: () => "https://drive/" + id };
+        const file = { id, name: blob.name, path: path + "/" + blob.name, blob, getId: () => id, getName: () => blob.name, getBlob: () => blob, getUrl: () => "https://drive/" + id, getSize: () => (typeof blob.content === "string" ? Buffer.byteLength(blob.content) : (blob.bytes || []).length) };
         files.set(id, file);
         return file;
       },
@@ -507,6 +507,16 @@ expect("Photo entries DONE (server ne dekh liya)", ["PH9", "PH1"].map((k) => get
   fetchCount = 0;
   S.runHisab();
   expect("Limit: pause khatam → poora hisab (adhoora kaam pura), phir pause nahi", [fetchCount > 10, !!JSON.parse(props.get("HISAB_GATE")).pausedUntil && new Date(JSON.parse(props.get("HISAB_GATE")).pausedUntil) > new Date()], [true, false]);
+}
+
+// ---- Roz ka backup: alerts + notification history bhi (Rohit) ----
+{
+  put("projects/KSK/notifSeen/munshi@bpmc", { seenAt: vm.runInContext("new Date()", sandbox) });
+  S.dailyBackup("test backup");
+  const f = [...S.DriveApp._files.values()].filter((x) => x.path.includes("EMRS KESHKAL/Backup/") && x.name.endsWith(".json")).pop();
+  const j = JSON.parse(f?.blob.getDataAsString() ?? "{}");
+  expect("Backup: alerts, notifications, ghanti ka 'dekh liya' bhi file mein", [j.counts?.alerts, j.counts?.notifications > 0, j.counts?.notifSeen], [1, true, 1]);
+  expect("Backup: notification ka poora record (key, text, resolvedAt)", (j.collections?.notifications ?? []).some((n) => n.data?.key === "BREAKDOWN:poc200" && n.data?.text && n.data?.resolvedAt), true);
 }
 
 console.log(fails ? `\n${fails} jaanch FAIL` : "\nSab server jaanch pass");

@@ -1409,7 +1409,10 @@ function installTriggers() {
 var OBSIDIAN_ROOT = 'AI obsidian';
 var PROJECT_COLLECTIONS = ['stockMoves', 'machineLogs', 'machineDeductions', 'labourMuster', 'staffAttendance', 'staffPassbook',
   'workEntries', 'storeMoves', 'ledger', 'photos', 'auditLog', 'unlocks', 'days', 'machineBills',
-  'labour', 'labourAttendance', 'labourPassbook', 'labourBalances', 'labourWeeks', 'staffBalances', 'storeService', 'storeSummary', 'storeAssets', 'ledgerSummary', 'dpr', 'dprActions'];
+  'labour', 'labourAttendance', 'labourPassbook', 'labourBalances', 'labourWeeks', 'staffBalances', 'storeService', 'storeSummary', 'storeAssets', 'ledgerSummary', 'dpr', 'dprActions',
+  // Phase 3: alerts, notification history, har user ka "dekh liya" (restore mein nahi — alerts server khud dobara banata hai)
+  'alerts', 'notifications', 'notifSeen'];
+var BACKUP_NOT_ENTRIES = ['days', 'auditLog', 'dpr', 'alerts', 'notifications', 'notifSeen'];
 var GLOBAL_COLLECTIONS = ['users', 'roles', 'settings', 'projects', 'masters_materials', 'masters_machines', 'masters_contractors',
   'masters_parties', 'masters_storeItems', 'masters_staff', 'masters_companyAccounts', 'auditLog'];
 
@@ -1465,7 +1468,7 @@ function dailyBackup(reason) {
     var entries = 0;
     PROJECT_COLLECTIONS.forEach(function (c) {
       cols[c] = query_(parent, c).map(plain_);
-      if (c !== 'days' && c !== 'auditLog' && c !== 'dpr') entries += cols[c].length;
+      if (BACKUP_NOT_ENTRIES.indexOf(c) < 0) entries += cols[c].length;
     });
     // DPR ke saare version bhi backup mein
     cols.dprVersions = [];
