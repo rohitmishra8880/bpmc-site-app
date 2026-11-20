@@ -13,10 +13,12 @@ import { db } from "../lib/firebase";
 import { downloadPdf, Sheet } from "../lib/print";
 import { useProjects } from "../lib/projects";
 import { PageHead } from "../lib/ui";
+import { SiteReport } from "./SiteReport";
 import { measureText } from "./Work";
 
-type Kind = "staff" | "labour" | "machinery" | "stock" | "store" | "ledger" | "contractor" | "work" | "dpr";
+type Kind = "site" | "staff" | "labour" | "machinery" | "stock" | "store" | "ledger" | "contractor" | "work" | "dpr";
 const REPORTS: { k: Kind; ic: string; label: string; sub: string; soon?: string; landscape: boolean }[] = [
+  { k: "site", ic: "🗓️", label: "Weekly / monthly site report", sub: "Week or month — labour man-days, staff, stock, machinery, work done · English / हिंदी", landscape: false },
   { k: "staff", ic: "🧑‍💼", label: "Staff attendance & khata", sub: "Month — P / HD / A, earned, paid, balance", landscape: true },
   { k: "labour", ic: "👷", label: "Labour — company / contractor", sub: "Week or month — day-wise attendance, OT, amount, paid", landscape: true },
   { k: "machinery", ic: "🔧", label: "Machinery", sub: "Month — day-wise SR / CR / hours / diesel / amount + rental bill", landscape: true },
@@ -109,6 +111,8 @@ export function Reports() {
       </>
     );
   }
+
+  if (r.k === "site") return <SiteReport pid={current.id} projectName={current.name} onBack={() => setParams({})} />;
 
   const ws = weekStart(weekOf);
   const lFrom = labourPeriod === "week" ? ws : `${month}-01`;
