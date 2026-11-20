@@ -519,5 +519,30 @@ expect("Photo entries DONE (server ne dekh liya)", ["PH9", "PH1"].map((k) => get
   expect("Backup: notification ka poora record (key, text, resolvedAt)", (j.collections?.notifications ?? []).some((n) => n.data?.key === "BREAKDOWN:poc200" && n.data?.text && n.data?.resolvedAt), true);
 }
 
+// ---- Photo wali haazri (Rohit): staff + company labour zaroori, thekedar optional ----
+{
+  put("masters_staff/bablu", { name: "Bablu", salaryPaise: 1500000, deleted: null });
+  put("projects/KSK/staffAttendance/PA1", P({ businessDate: today, staffId: "anil", staffName: "Anil", mark: "P", rev: 2 }));
+  put("projects/KSK/staffAttendance/PA2", P({ businessDate: today, staffId: "bablu", staffName: "Bablu", mark: "P" }));
+  put("projects/KSK/labourAttendance/PL1", P({ businessDate: today, labourId: "R1", labourName: "Ramu", group: "COMPANY", mark: "P", otHours: 0, ratePaise: 60000 }));
+  put("projects/KSK/labourAttendance/PL2", P({ businessDate: today, labourId: "R2", labourName: "Shyam", group: "suraj", mark: "P", otHours: 0, ratePaise: 90000 }));
+  // Bablu ki photo judi (camera), Anil aur Ramu ki nahi; Shyam thekedar ka (optional)
+  put("projects/KSK/photos/PP1", P({ businessDate: today, refCol: "staffAttendance", refId: "PA2", refKey: "staffAttendance/PA2", driveFileId: "file_att", mime: "image/jpeg", label: "Attendance - Bablu", takenAt: new Date().toISOString(), source: "CAMERA" }));
+  put("projects/KSK/alerts/current", { asOf: "2000-01-01", items: [] });
+  S.runHisab(true);
+  const items = get("projects/KSK/alerts/current")?.data?.items ?? [];
+  const np = items.find((a) => a.key === "NO_PHOTO:" + today);
+  expect("Photo haazri: bina photo wale zaroori (Anil staff, Ramu company) ka alert; Bablu (photo) aur Shyam (thekedar) nahi", [np?.kind, np?.text?.includes("Anil"), np?.text?.includes("Ramu"), np?.text?.includes("Bablu"), np?.text?.includes("Shyam")], ["ATTENDANCE_NO_PHOTO", true, true, false, false]);
+  const dp = get(`projects/KSK/dpr/${today}`)?.data?.snapshot;
+  // zaroori: Anil, Bablu (staff), Ramu (company labour), company ki gintti LM1 = 4; Shyam (thekedar) nahi
+  expect("Photo haazri: DPR mein gintti (1 / 4), haazri ki photo DPR ke photo grid mein nahi", [dp?.attendancePhotos?.taken, dp?.attendancePhotos?.required, (dp?.photos ?? []).some((x) => x.driveFileId === "file_att")], [1, 4, false]);
+  // Anil ki photo baad mein judi → alert mein sirf Ramu
+  put("projects/KSK/photos/PP2", P({ businessDate: today, refCol: "staffAttendance", refId: "PA1", refKey: "staffAttendance/PA1", driveFileId: "file_att2", mime: "image/jpeg", label: "Attendance - Anil", takenAt: new Date().toISOString(), source: "UPLOAD", uploadedBy: "munshi@bpmc" }));
+  put("projects/KSK/alerts/current", { asOf: "2000-01-01", items: [] });
+  S.runHisab(true);
+  const np2 = (get("projects/KSK/alerts/current")?.data?.items ?? []).find((a) => a.key === "NO_PHOTO:" + today);
+  expect("Photo haazri: Anil ki photo judi → alert mein Anil nahi, Ramu hai; DPR 2 / 4", [np2?.text?.includes("Anil"), np2?.text?.includes("Ramu"), get(`projects/KSK/dpr/${today}`)?.data?.snapshot?.attendancePhotos?.taken], [false, true, 2]);
+}
+
 console.log(fails ? `\n${fails} jaanch FAIL` : "\nSab server jaanch pass");
 process.exit(fails ? 1 : 0);

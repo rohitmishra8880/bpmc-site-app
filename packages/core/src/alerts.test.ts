@@ -125,6 +125,16 @@ describe("alerts — DPR lock yaad dilana", () => {
   });
 });
 
+describe("alerts — bina photo ki haazri (staff / company labour ki photo zaroori)", () => {
+  it("din-wise ek alert, pehle 4 naam, phir \"+N more\"", () => {
+    const a = buildAlerts(base({ missingPhotos: [{ date: "2026-11-16", names: ["Anil"] }, { date: "2026-11-17", names: ["A", "B", "C", "D", "E", "F"] }] }));
+    expect(a.map((x) => [x.key, x.kind, x.severity, x.text, x.link])).toEqual([
+      ["NO_PHOTO:2026-11-16", "ATTENDANCE_NO_PHOTO", "warn", "16 Nov 2026: 1 attendance entry has no photo — Anil", "/attendance"],
+      ["NO_PHOTO:2026-11-17", "ATTENDANCE_NO_PHOTO", "warn", "17 Nov 2026: 6 attendance entries have no photo — A, B, C, D +2 more", "/attendance"],
+    ]);
+  });
+});
+
 describe("alerts — backup (sirf Admin)", () => {
   it("30 ghante se zyada purana → crit, adminOnly", () => {
     const a = buildAlerts(base({ lastBackupAt: new Date("2026-11-15T23:31:00+05:30") }));

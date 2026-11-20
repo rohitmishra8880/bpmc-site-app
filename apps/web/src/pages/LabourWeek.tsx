@@ -1,7 +1,9 @@
 // Labour attendance — hafte ka sheet (Mon–Sun). Rohit ka design: PLAN.md Phase 2 "Labour Attendance".
 import { collection, doc, onSnapshot, query, serverTimestamp, where, writeBatch, type DocumentData } from "firebase/firestore";
 import { useEffect, useMemo, useState } from "react";
-import { addDays, canEditDate, formatDate, formatINR, labourVisibleInWeek, toBusinessDateIST, toPaise, weekDates, type LabourType, type StaffMark } from "@bpmc/core";
+import { addDays, attendancePhotoNeed, canEditDate, formatDate, formatINR, labourVisibleInWeek, toBusinessDateIST, toPaise, weekDates, type LabourType, type StaffMark } from "@bpmc/core";
+import { AttendancePhotoField, newEntryId, photoWrite, type PickedPhoto } from "../components/AttendancePhoto";
+import { refKey, useDayPhotos } from "../components/Photos";
 import { deviceLabel } from "../lib/audit";
 import { can, useProfile } from "../lib/auth";
 import { db } from "../lib/firebase";
@@ -321,18 +323,29 @@ function CellDialog({ l, date, row, onClose }: { l: MasterRow; date: string; row
   const [ot, setOt] = useState(row?.otHours ? String(row.otHours) : "");
   const [reason, setReason] = useState("");
   const [removing, setRemoving] = useState(false);
+  // Photo: company ki labour zaroori, thekedar ke aadmi optional (Rohit)
+  const [pic, setPic] = useState<PickedPhoto | null>(null);
+  const dayPhotos = useDayPhotos(current?.id, date);
+  const hasPhoto = !!row && dayPhotos.some((x) => x.refKey === refKey("labourAttendance", row.id));
+  const group = (l.group as string | undefined) ?? "COMPANY";
+  const need = attendancePhotoNeed("LABOUR", { mark, group });
+  const photoOk = need !== "REQUIRED" || hasPhoto || !!pic || !navigator.onLine;
   const otN = ot.trim() === "" ? 0 : Number(ot);
   const otErr = !Number.isFinite(otN) || otN < 0 || otN > 16 ? "Overtime must be 0–16 hours" : mark === "A" && otN > 0 ? "No overtime on an Absent day" : null;
-  const valid = !otErr && (!row || reason.trim().length >= 3);
+  const valid = !otErr && photoOk && (!row || reason.trim().length >= 3);
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!valid || !current) return;
     try {
+      const id = row?.id ?? newEntryId(current.id, "labourAttendance");
       await writeEntries(
         current.id,
         profile.email,
-        [{ col: "labourAttendance", id: row?.id, current: row, action: row ? "UPDATE" : "CREATE", data: { businessDate: date, labourId: l.id, labourName: l.name, group: l.group ?? "COMPANY", type: l.type, mark, otHours: otN, ratePaise: row?.ratePaise ?? l.ratePaise ?? null } }],
+        [
+          { col: "labourAttendance", id, current: row, action: row ? "UPDATE" : "CREATE", data: { businessDate: date, labourId: l.id, labourName: l.name, group: l.group ?? "COMPANY", type: l.type, mark, otHours: otN, ratePaise: row?.ratePaise ?? l.ratePaise ?? null } },
+          ...(pic && mark !== "A" ? [photoWrite(pic, { date, refCol: "labourAttendance", refId: id, label: `Labour - ${l.name}`, by: profile.email })] : []),
+        ],
         row ? reason.trim() : null,
       );
       toast("Saved ✓ · server is calculating ⏳");
@@ -367,6 +380,7 @@ function CellDialog({ l, date, row, onClose }: { l: MasterRow; date: string; row
           <input id="c-ot" className="input" inputMode="decimal" value={ot} onChange={(e) => setOt(e.target.value)} placeholder="0" disabled={mark === "A"} />
           {otErr ? <span className="err">{otErr}</span> : <span className="hint">OT pay = rate ÷ 8 × hours</span>}
         </div>
+        {current && <AttendancePhotoField pid={current.id} date={date} label={`Labour - ${l.name}`} need={need} facing="environment" value={pic} onChange={setPic} hasExisting={hasPhoto} />}
         {row && (
           <div className="field">
             <label htmlFor="c-why">Reason for change *</label>
@@ -416,16 +430,26 @@ function CountDialog({ g, date, row, onClose }: { g: MasterRow; date: string; ro
   const n = (s: string) => (s.trim() === "" ? 0 : Number(s));
   const bad = (["mistri", "kuli", "reja"] as const).filter((k) => !Number.isInteger(n(v[k])) || n(v[k]) < 0);
   const otBad = !Number.isFinite(n(v.otHours)) || n(v.otHours) < 0;
-  const valid = !bad.length && !otBad && n(v.mistri) + n(v.kuli) + n(v.reja) > 0 && (!row || reason.trim().length >= 3);
+  // Group photo: thekedar ke aadmi optional (Rohit)
+  const [pic, setPic] = useState<PickedPhoto | null>(null);
+  const dayPhotos = useDayPhotos(current?.id, date);
+  const hasPhoto = !!row && dayPhotos.some((x) => x.refKey === refKey("labourMuster", row.id));
+  const need = attendancePhotoNeed("MUSTER", { group: g.id, count: n(v.mistri) + n(v.kuli) + n(v.reja) });
+  const photoOk = need !== "REQUIRED" || hasPhoto || !!pic || !navigator.onLine;
+  const valid = !bad.length && !otBad && photoOk && n(v.mistri) + n(v.kuli) + n(v.reja) > 0 && (!row || reason.trim().length >= 3);
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!valid || !current) return;
     try {
+      const id = row?.id ?? newEntryId(current.id, "labourMuster");
       await writeEntries(
         current.id,
         profile.email,
-        [{ col: "labourMuster", id: row?.id, current: row, action: row ? "UPDATE" : "CREATE", data: { businessDate: date, contractorId: g.id, contractorName: g.name, mistri: n(v.mistri), kuli: n(v.kuli), reja: n(v.reja), otHours: n(v.otHours), work: v.work.trim() || null } }],
+        [
+          { col: "labourMuster", id, current: row, action: row ? "UPDATE" : "CREATE", data: { businessDate: date, contractorId: g.id, contractorName: g.name, mistri: n(v.mistri), kuli: n(v.kuli), reja: n(v.reja), otHours: n(v.otHours), work: v.work.trim() || null } },
+          ...(pic ? [photoWrite(pic, { date, refCol: "labourMuster", refId: id, label: `Muster - ${g.name}`, by: profile.email })] : []),
+        ],
         row ? reason.trim() : null,
       );
       toast("Saved ✓ · server is calculating ⏳");
@@ -451,6 +475,7 @@ function CountDialog({ g, date, row, onClose }: { g: MasterRow; date: string; ro
           <label htmlFor="cd-work">Work</label>
           <input id="cd-work" className="input" value={v.work} onChange={(e) => setV({ ...v, work: e.target.value })} placeholder="e.g. shuttering, bar bending" />
         </div>
+        {current && <AttendancePhotoField pid={current.id} date={date} label={`Muster - ${g.name}`} need={need} facing="environment" value={pic} onChange={setPic} hasExisting={hasPhoto} />}
         {row && (
           <div className="field">
             <label htmlFor="cd-why">Reason for change *</label>

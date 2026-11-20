@@ -61,6 +61,7 @@
 - ✅ Quota gate (17 Nov 2026): Apps Script urlfetch roz ~20,000 per Google account (test + live saanjha) — 16 Nov 23:53 se dono server fail. Ab har 5 min pehle ek sawaal (naya auditLog?); poora hisab sirf nayi entry / naya din / kaam hua / ghante mein ek baar. Index: auditLog.at (collection group). Server e2e 109.
 - ✅ Limit ke baad 1 ghanta pause (17 Nov 2026, 2:13): limit error → 1 ghanta 0 call, phir poora hisab; serverRuns log asli error nahi chhupata. Server e2e 112. Gate + pause **test aur live dono script par push** (live: setupLive file wahi rakhi). Live par DPR + alerts ka server hissa bhi chalu; live app ki screen abhi Phase 2.
 - ⏳ **Yahin se shuru (agli baar):** (1) test + live executions dekho — runs Completed? pause ke baad poora hisab chala? (2) test par Alerts page + 🔔 bhare ya nahi (3) Rohit test par DPR (PDF / Print, WhatsApp, pehle page ka watermark) + alerts dekhe → OK par live par rules + app (4) Phase 4.
+- ✅ Photo wali haazri (20 Nov 2026, TDD, test par): staff ki P / HD aur company ki labour (naam-wise + company ki gintti) ki photo zaroori, thekedar ke aadmi ki optional (Rohit). Do tareeke: 📷 camera (browser GPS + abhi ka samay) ya 🖼 staff ki bheji photo upload — photo ke andar (EXIF) tarikh, samay, GPS zaroori aur usi din ki (WhatsApp par Document ki tarah bhejni hogi). Radius / geofence nahi (Rohit ne hataya). Entry + photo ek hi save mein; net na ho to bina photo save, baad mein ⚠️ No photo se. Bina photo zaroori haazri → alert (kal / aaj); DPR ke staff note mein "Attendance photos x / y", haazri ki photo DPR ke photo grid mein nahi. Tests: core 188, rules 53, server e2e 119.
 - Phase 3: DPR (lock / version / PDF / WhatsApp / Obsidian md + json + pdf), alerts + notifications, Memory JSON. Phase 4: Help Center, AI, Hindi toggle, offline jaanch, weekly / monthly report, purana data.
 
 ## Phase 1 — haal (24 Oct 2026) ✅
@@ -329,6 +330,7 @@ G:\My Drive\AI obsidian\<project vault>\
 | **2. Entry** | Attendance, Inventory (unit / remark / add-edit-delete), Store / Saman, Machinery (Day / Month / Hour + advance + monthly bill), Daily Work + Drive photos, Creditors; offline |
 | **3. Report** | Dashboard, DPR (submit, version, PDF, WhatsApp), alerts (app + email), Obsidian DPR, Sheet khata |
 | **4. Extra** | Help Center, AI Insights, poori Hindi, voice entry, weekly / monthly report |
+| **5. Aakhri: PWA** (Rohit, 20 Nov 2026) | Phone par install (icon, poori screen), net band ho tab bhi app khule. Play Store / App Store abhi nahi (paid) |
 
 Har phase ke end: test link, kya bana, tests, agla phase, risk + Obsidian `Memory\` JSON.
 

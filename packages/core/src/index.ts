@@ -22,3 +22,4 @@ export * from "./work";
 export * from "./photo";
 export * from "./dpr";
 export * from "./alerts";
+export * from "./attendancePhoto";

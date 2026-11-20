@@ -741,10 +741,11 @@ function dprOneDate_(parent, pid, proj, date, dd, ledger, ctx) {
       return { type: x.type, itemName: x.itemName || x.itemId, qty: Number(x.qty) || 0, unit: x.unit || null, contractorId: x.contractorId || null, condition: x.condition || null, partyName: x.partyName || null, otherProjectName: x.otherProjectName || x.otherProjectId || null, purpose: x.purpose || null, time: x.time || null, deleted: !!x.deleted };
     }),
     creditors: dprCreditors_(ledger, date, ctx),
-    photos: rangeQuery_(parent, 'photos', 'businessDate', date, date).sort(byId).map(function (d) {
+    photos: rangeQuery_(parent, 'photos', 'businessDate', date, date).sort(byId).filter(function (d) { return ATTENDANCE_COLS.indexOf(d.data.refCol) < 0; }).map(function (d) {
       var x = d.data;
       return { label: x.label || null, takenAt: x.takenAt, lat: x.lat, lng: x.lng, accuracyM: x.accuracyM, driveFileId: x.driveFileId, deleted: !!x.deleted };
     }),
+    attendancePhotos: attendancePhotoCount_(parent, date),
   });
   var fp = BPMCCore.dprFingerprint(snapshot);
   var path = parent + '/dpr/' + date;
@@ -775,6 +776,51 @@ function dprOneDate_(parent, pid, proj, date, dd, ledger, ctx) {
     { update: { name: fullName_(path), fields: encFields_({ date: date, status: 'LOCKED', version: version, snapshot: snapshot, fp: fp, lockedBy: lockedBy, lockedAt: lockedAt, note: note, updatedAt: now }) } },
   ]);
   return true;
+}
+
+// ---------------- Photo wali haazri (Rohit) ----------------
+var ATTENDANCE_COLS = ['staffAttendance', 'labourAttendance', 'labourMuster'];
+
+/** Din(on) ki haazri (har aadmi / thekedar ki ek din mein sabse nayi entry) + jin entries se photo judi */
+function attendancePhotoData_(parent, from, to) {
+  var latest = function (docs, key) {
+    var out = {};
+    docs.forEach(function (d) {
+      if (d.data.deleted || !d.data[key]) return;
+      var k = d.data.businessDate + '|' + d.data[key];
+      if (!out[k] || d.updateTime > out[k].updateTime) out[k] = d;
+    });
+    return Object.keys(out).map(function (k) { return out[k]; });
+  };
+  var entries = [];
+  latest(rangeQuery_(parent, 'staffAttendance', 'businessDate', from, to), 'staffId').forEach(function (d) {
+    entries.push({ col: 'staffAttendance', id: d.id, businessDate: d.data.businessDate, name: d.data.staffName || d.data.staffId, kind: 'STAFF', mark: d.data.mark });
+  });
+  latest(rangeQuery_(parent, 'labourAttendance', 'businessDate', from, to), 'labourId').forEach(function (d) {
+    entries.push({ col: 'labourAttendance', id: d.id, businessDate: d.data.businessDate, name: d.data.labourName || d.data.labourId, kind: 'LABOUR', mark: d.data.mark, group: d.data.group || 'COMPANY' });
+  });
+  latest(rangeQuery_(parent, 'labourMuster', 'businessDate', from, to), 'contractorId').forEach(function (d) {
+    var x = d.data;
+    entries.push({ col: 'labourMuster', id: d.id, businessDate: x.businessDate, name: x.contractorName || x.contractorId, kind: 'MUSTER', group: x.contractorId, count: (Number(x.mistri) || 0) + (Number(x.kuli) || 0) + (Number(x.reja) || 0) });
+  });
+  var refKeys = new Set();
+  rangeQuery_(parent, 'photos', 'businessDate', from, to).forEach(function (ph) {
+    if (!ph.data.deleted && ph.data.refKey) refKeys.add(ph.data.refKey);
+  });
+  return { entries: entries, refKeys: refKeys };
+}
+
+/** DPR ke liye: zaroori photo wali haazri mein kitni ki photo judi (zaroori koi nahi → null) */
+function attendancePhotoCount_(parent, date) {
+  var a = attendancePhotoData_(parent, date, date);
+  var required = 0;
+  var taken = 0;
+  a.entries.forEach(function (e) {
+    if (BPMCCore.attendancePhotoNeed(e.kind, e) !== 'REQUIRED') return;
+    required++;
+    if (a.refKeys.has(e.col + '/' + e.id)) taken++;
+  });
+  return required ? { taken: taken, required: required } : null;
 }
 
 /** Naye version ka kaaran: us din ki badli entries ke audit se */
@@ -882,6 +928,10 @@ function hisabAlerts_(parent, pid, changed, ctx) {
     parties: parties,
     draftDprDates: drafts.map(function (d) { return d.id; }),
     lastBackupAt: latestBackupAt_(ctx),
+    missingPhotos: (function () {
+      var a = attendancePhotoData_(parent, BPMCCore.addDays(today, -1), today);
+      return BPMCCore.attendanceMissingPhotos(a.entries, a.refKeys);
+    })(),
   });
   var prevKeys = ((cur && cur.data.items) || []).map(function (a) { return a.key; });
   var diff = BPMCCore.diffAlerts(prevKeys, items);

@@ -23,6 +23,8 @@ export interface DprInput {
   storeMoves: { type: string; itemName: string; qty: number; unit?: string | null; contractorId?: string | null; condition?: string | null; partyName?: string | null; otherProjectName?: string | null; purpose?: string | null; time?: string | null; deleted?: unknown }[];
   creditors?: { bakayaPaise: Paise; overduePaise: Paise; toRecoverPaise?: Paise } | null;
   photos: { label?: string | null; takenAt: string; lat?: number | null; lng?: number | null; accuracyM?: number | null; driveFileId: string; deleted?: unknown }[];
+  /** Haazri ki photo: kitni judi / kitni zaroori (staff + company labour) — photo grid mein nahi */
+  attendancePhotos?: { taken: number; required: number } | null;
 }
 
 export interface DprSnapshot {
@@ -39,6 +41,8 @@ export interface DprSnapshot {
   store: { type: string; item: string; qty: number; unit: string; who: string; condition: string | null; purpose: string | null }[];
   creditors: { bakayaPaise: Paise; overduePaise: Paise; toRecoverPaise: Paise } | null;
   photos: { label: string; takenAt: string; gps: string; driveFileId: string }[];
+  /** Sirf tab jab jaankari ho — warna field hi nahi (purani DPR ka fingerprint same) */
+  attendancePhotos?: { taken: number; required: number };
 }
 
 const WORK_ORDER = ["CONCRETE", "EXCAVATION", "SHUTTERING", "STEEL"];
@@ -92,6 +96,7 @@ export function buildDpr(i: DprInput): DprSnapshot {
     labour: { rows, totals: i.day.labour?.totals ?? zero }, staff, stock, diesel, machines, work, workTotals, store,
     creditors: i.creditors ? { bakayaPaise: i.creditors.bakayaPaise, overduePaise: i.creditors.overduePaise, toRecoverPaise: i.creditors.toRecoverPaise ?? 0 } : null,
     photos,
+    ...(i.attendancePhotos ? { attendancePhotos: { taken: i.attendancePhotos.taken, required: i.attendancePhotos.required } } : {}),
   };
 }
 
@@ -142,7 +147,7 @@ export function dprSections(d: DprSnapshot): DprSection[] {
       title: "Staff & Labour / स्टाफ और मजदूर",
       head: ["Contractor / ठेकेदार", "Mistri / मिस्त्री", "Kuli / कुली", "Reja / रेजा", "Total / कुल"],
       rows: [...d.labour.rows.map((r) => [r.contractor, String(r.mistri), String(r.kuli), String(r.reja), String(r.total)]), ...(d.labour.rows.length ? [["Total / कुल", String(t.mistri), String(t.kuli), String(t.reja), String(t.total)]] : [])],
-      note: `Staff / स्टाफ: Present / हाज़िर ${d.staff.present} · Half day / आधा दिन ${d.staff.halfDay} · Absent / गैरहाज़िर ${d.staff.absent}`,
+      note: `Staff / स्टाफ: Present / हाज़िर ${d.staff.present} · Half day / आधा दिन ${d.staff.halfDay} · Absent / गैरहाज़िर ${d.staff.absent}${d.attendancePhotos ? ` · Attendance photos / हाज़िरी फ़ोटो: ${d.attendancePhotos.taken} / ${d.attendancePhotos.required}` : ""}`,
     });
   }
   if (d.stock.length) {

@@ -5,7 +5,7 @@ import { addDays, EDIT_WINDOW_DAYS, formatDate, toBusinessDateIST } from "./date
 import { formatINR, formatQtyShort } from "./money";
 import type { StoreAlert } from "./store";
 
-export type AlertKind = "BREAKDOWN" | "LOW_MATERIAL" | "STORE_LOW" | "NOT_RETURNED" | "OVERDUE" | "DPR_NOT_LOCKED" | "BACKUP_STALE";
+export type AlertKind = "BREAKDOWN" | "LOW_MATERIAL" | "STORE_LOW" | "NOT_RETURNED" | "OVERDUE" | "DPR_NOT_LOCKED" | "BACKUP_STALE" | "ATTENDANCE_NO_PHOTO";
 export type AlertSeverity = "crit" | "warn" | "info";
 
 export interface SiteAlert {
@@ -48,6 +48,8 @@ export interface AlertInput {
   /** Jin dino ki DPR abhi Draft hai (lock nahi) */
   draftDprDates: string[];
   lastBackupAt: Date | null;
+  /** Zaroori photo wali haazri bina photo (attendanceMissingPhotos) — kal / aaj */
+  missingPhotos?: { date: string; names: string[] }[];
 }
 
 /** Backup itne ghante se purana → alert (roz raat ~11:30 chalta hai) */
@@ -138,6 +140,16 @@ function dprDrafts(i: AlertInput): SiteAlert[] {
     .map((d): SiteAlert => ({ key: `DPR:${d}`, kind: "DPR_NOT_LOCKED", severity: "info", title: "DPR not locked", text: `DPR for ${formatDate(d)} is not locked yet — editing closes ${formatDate(addDays(d, EDIT_WINDOW_DAYS))}, 11:59 PM`, link: `/dpr?date=${d}`, since: d, adminOnly: false }));
 }
 
+function noPhoto(i: AlertInput): SiteAlert[] {
+  return (i.missingPhotos ?? [])
+    .filter((m) => m.names.length)
+    .map((m): SiteAlert => {
+      const n = m.names.length;
+      const who = m.names.slice(0, 4).join(", ") + (n > 4 ? ` +${n - 4} more` : "");
+      return { key: `NO_PHOTO:${m.date}`, kind: "ATTENDANCE_NO_PHOTO", severity: "warn", title: "Attendance without photo", text: `${formatDate(m.date)}: ${n} attendance ${n > 1 ? "entries have" : "entry has"} no photo — ${who}`, link: "/attendance", since: m.date, adminOnly: false };
+    });
+}
+
 function backup(i: AlertInput): SiteAlert[] {
   if (!i.lastBackupAt || i.now.getTime() - i.lastBackupAt.getTime() <= BACKUP_STALE_HOURS * 3600_000) return [];
   const d = toBusinessDateIST(i.lastBackupAt);
@@ -146,7 +158,7 @@ function backup(i: AlertInput): SiteAlert[] {
 
 /** Saare alert: crit → warn → info, phir key se (har baar same kram) */
 export function buildAlerts(i: AlertInput): SiteAlert[] {
-  return [...breakdowns(i), ...lowMaterial(i), ...store(i), ...overdue(i), ...dprDrafts(i), ...backup(i)].sort((a, b) => SEV[a.severity] - SEV[b.severity] || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+  return [...breakdowns(i), ...lowMaterial(i), ...store(i), ...overdue(i), ...dprDrafts(i), ...noPhoto(i), ...backup(i)].sort((a, b) => SEV[a.severity] - SEV[b.severity] || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
 }
 
 /** Pichli list ke key se: kaun naya aaya (notification), kaun khatam hua */

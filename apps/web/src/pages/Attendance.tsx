@@ -1,8 +1,10 @@
 import { collection, onSnapshot, query, where, type DocumentData } from "firebase/firestore";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { canEditDate, formatDate, formatINR, toBusinessDateIST, toPaise, type StaffMark } from "@bpmc/core";
+import { attendancePhotoNeed, canEditDate, formatDate, formatINR, toBusinessDateIST, toPaise, type StaffMark } from "@bpmc/core";
+import { AttachPhotoDialog, AttendancePhotoField, newEntryId, photoWrite, type PickedPhoto } from "../components/AttendancePhoto";
 import { DateBar } from "../components/DateBar";
+import { PhotoDialog, refKey, useDayPhotos } from "../components/Photos";
 import { can, useProfile } from "../lib/auth";
 import { db } from "../lib/firebase";
 import { softDeleteWrite, useDay, useDayEntries, useUnlock, useUnlocks, writeEntries, type Entry } from "../lib/entries";
@@ -55,6 +57,16 @@ function StaffDay() {
   const balances = useStaffBalances(current?.id);
   const [khataFor, setKhataFor] = useState<MasterRow | null>(null);
   const [markChange, setMarkChange] = useState<{ e: Entry; mark: StaffMark } | null>(null);
+  // Photo wali haazri: staff ki P / HD photo ke saath (Rohit)
+  const photos = useDayPhotos(current?.id, date);
+  const photoCount = useMemo(() => {
+    const m = new Map<string, number>();
+    photos.forEach((p) => m.set(p.refKey as string, (m.get(p.refKey as string) ?? 0) + 1));
+    return m;
+  }, [photos]);
+  const [photoMark, setPhotoMark] = useState<{ s: MasterRow; mark: StaffMark; cur: Entry | null } | null>(null);
+  const [viewPhotos, setViewPhotos] = useState<{ e: Entry; s: MasterRow } | null>(null);
+  const [attachFor, setAttachFor] = useState<{ e: Entry; s: MasterRow } | null>(null);
 
   const open = canEditDate(date, new Date(), unlock ? { expiresAt: unlock } : null) && can(profile, "entry.create");
   const markFor = useMemo(() => new Map((marks ?? []).filter((m) => !m.deleted).map((m) => [m.staffId as string, m])), [marks]);
@@ -67,6 +79,11 @@ function StaffDay() {
   const mark = async (s: MasterRow, m: StaffMark) => {
     const cur = markFor.get(s.id);
     if (cur?.mark === m) return;
+    // P / HD ki photo zaroori — entry mein pehle se photo na ho to photo ke saath save
+    if (attendancePhotoNeed("STAFF", { mark: m }) === "REQUIRED" && !(cur && photoCount.get(refKey("staffAttendance", cur.id)))) {
+      setPhotoMark({ s, mark: m, cur: cur ?? null });
+      return;
+    }
     if (cur) {
       setMarkChange({ e: cur, mark: m });
       return;
@@ -162,6 +179,15 @@ function StaffDay() {
                           </button>
                         ))}
                         {cur?.serverStatus === "PENDING" && <span title="Server is calculating">⏳</span>}
+                        {cur && photoCount.get(refKey("staffAttendance", cur.id)) ? (
+                          <button className="btn sm" onClick={() => setViewPhotos({ e: cur, s })} aria-label={`Photos of ${s.name}`}>
+                            📷 {photoCount.get(refKey("staffAttendance", cur.id))}
+                          </button>
+                        ) : cur && attendancePhotoNeed("STAFF", { mark: cur.mark as string }) === "REQUIRED" ? (
+                          <button className="btn sm" disabled={!open} onClick={() => setAttachFor({ e: cur, s })} style={{ color: "var(--warn)" }}>
+                            ⚠️ No photo
+                          </button>
+                        ) : null}
                       </div>
                     </td>
                     <td className="r">{s.salaryPaise ? `${formatINR(s.salaryPaise)}/mo` : "—"}</td>
@@ -186,6 +212,13 @@ function StaffDay() {
       <MonthlyStatement staff={staff} balances={balances} />
 
       {khataFor && <KhataDialog s={khataFor} date={date} open={open} balance={balances[khataFor.id]} onClose={() => setKhataFor(null)} />}
+      {photoMark && <StaffPhotoMarkDialog pid={current.id} date={date} s={photoMark.s} mark={photoMark.mark} cur={photoMark.cur} onClose={() => setPhotoMark(null)} />}
+      {viewPhotos && (
+        <PhotoDialog pid={current.id} refCol="staffAttendance" refId={viewPhotos.e.id} date={date} label={`Attendance - ${viewPhotos.s.name}`} title={`${viewPhotos.s.name} — attendance photo`} photos={photos} onClose={() => setViewPhotos(null)} />
+      )}
+      {attachFor && (
+        <AttachPhotoDialog pid={current.id} date={date} refCol="staffAttendance" refId={attachFor.e.id} label={`Attendance - ${attachFor.s.name}`} need="REQUIRED" facing="user" onClose={() => setAttachFor(null)} />
+      )}
       {markChange && (
         <ReasonDialog
           title={`Change attendance to ${markChange.mark}?`}
@@ -198,6 +231,60 @@ function StaffDay() {
         />
       )}
     </>
+  );
+}
+
+/** Staff ki P / HD — photo ke saath ek hi save (entry + photo). Net na ho to bina photo save, baad mein ⚠️ se. */
+function StaffPhotoMarkDialog({ pid, date, s, mark, cur, onClose }: { pid: string; date: string; s: MasterRow; mark: StaffMark; cur: Entry | null; onClose: () => void }) {
+  const profile = useProfile();
+  const toast = useToast();
+  const [pic, setPic] = useState<PickedPhoto | null>(null);
+  const [reason, setReason] = useState("");
+  const [saving, setSaving] = useState(false);
+  const offline = !navigator.onLine;
+  const valid = (!!pic || offline) && (!cur || reason.trim().length >= 3);
+  const label = `Attendance - ${s.name}`;
+  const save = async () => {
+    if (!valid) return;
+    setSaving(true);
+    try {
+      const id = cur?.id ?? newEntryId(pid, "staffAttendance");
+      const data = { businessDate: date, staffId: s.id, staffName: s.name, mark };
+      await writeEntries(
+        pid,
+        profile.email,
+        [
+          cur ? { col: "staffAttendance", id, current: cur, action: "UPDATE", data } : { col: "staffAttendance", id, current: null, action: "CREATE", data },
+          ...(pic ? [photoWrite(pic, { date, refCol: "staffAttendance", refId: id, label, by: profile.email })] : []),
+        ],
+        cur ? reason.trim() : null,
+      );
+      toast(pic ? "Attendance saved with photo ✓" : "Attendance saved — add the photo when the network is back ⚠️");
+      onClose();
+    } catch (e) {
+      toast(errorText(e), true);
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <Dialog title={`${s.name} — ${mark === "P" ? "Present" : "Half day"} · ${formatDate(date)}`} onClose={onClose}>
+      <div className="form">
+        <AttendancePhotoField pid={pid} date={date} label={label} need="REQUIRED" facing="user" value={pic} onChange={setPic} />
+        {cur && (
+          <div className="field">
+            <label htmlFor="spm-why">Reason for change *</label>
+            <input id="spm-why" className="input" value={reason} onChange={(e) => setReason(e.target.value)} />
+          </div>
+        )}
+        <div className="actions">
+          <button type="button" className="btn" onClick={onClose}>Cancel</button>
+          <button type="button" className="btn primary" disabled={!valid || saving} onClick={() => void save()}>
+            {pic || !offline ? "Save" : "Save without photo"}
+          </button>
+        </div>
+      </div>
+    </Dialog>
   );
 }
 

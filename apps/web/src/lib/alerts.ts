@@ -75,6 +75,7 @@ export const KIND_IC: Record<SiteAlert["kind"], string> = {
   OVERDUE: "📒",
   DPR_NOT_LOCKED: "📝",
   BACKUP_STALE: "💾",
+  ATTENDANCE_NO_PHOTO: "📷",
 };
 
 export function whenText(t: Timestamp | null | undefined): string {

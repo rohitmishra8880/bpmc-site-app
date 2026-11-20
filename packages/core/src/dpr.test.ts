@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDpr, dprFingerprint, dprFolder, dprHtml, dprMarkdown, dprSame, dprWhatsapp, dprAutoFileDates, type DprInput } from "./dpr";
+import { buildDpr, dprFingerprint, dprFolder, dprHtml, dprMarkdown, dprSame, dprWhatsapp, dprAutoFileDates, dprSections, type DprInput } from "./dpr";
 
 const input = (o: Partial<DprInput> = {}): DprInput => ({
   date: "2026-10-24",
@@ -155,6 +155,18 @@ describe("DPR — Obsidian file aur share", () => {
     expect(t).toContain("Diesel: 646");
     expect(t).toContain("Concrete 120.5 M³");
     expect(t).toContain("v1");
+  });
+});
+
+describe("DPR — haazri ki photo", () => {
+  it("staff ke note mein photo gintti; haazri ki photo DPR ke photo grid mein nahi (server alag karta hai)", () => {
+    const d = buildDpr(input({ attendancePhotos: { taken: 5, required: 6 } }));
+    expect(d.attendancePhotos).toEqual({ taken: 5, required: 6 });
+    expect(dprSections(d).find((x) => x.title.startsWith("Staff & Labour"))?.note).toContain("Attendance photos / हाज़िरी फ़ोटो: 5 / 6");
+  });
+  it("photo ki jaankari na ho to snapshot mein field hi nahi (purani locked DPR ka fingerprint nahi badalta)", () => {
+    expect("attendancePhotos" in buildDpr(input())).toBe(false);
+    expect(dprFingerprint(buildDpr(input()))).toBe(dprFingerprint(buildDpr(input({ attendancePhotos: null }))));
   });
 });
 
